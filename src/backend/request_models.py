@@ -50,10 +50,11 @@ class VolumeRequest(BaseModel):
 #---------- Constellations ----------#
     
 class ConstellationRequest(BaseModel):
-    name: str
+    name: str | None = None
+    file_ref: str | None = None
     stick_figure: bool = True
-    n_stars: int
-    order: Optional[list[int]] = None
+    n_stars: int | None = None
+    order: list[int] | None = None
 
 class NStarsRequest(BaseModel):
     name: str

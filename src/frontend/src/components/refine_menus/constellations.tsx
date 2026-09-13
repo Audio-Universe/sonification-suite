@@ -34,14 +34,17 @@ import { ClickableConstellation, Star } from "../ui/ClickableConstellation";
 export default function Constellations({
   dataRef,
   dataName,
-  constellationMode,
+  constellationType,
   onApply,
 }: RefineMenuProps) {
 
+  if (!constellationType) {
+    throw new Error("Constellations requires constellationType");
+  }
 
   // const [imageSrc, setImageSrc] = useState<string | null>(null);
-  const [shapeImage, setShapeImage] = useState<string | null>(null);
-  const [shapeLoading, setShapeLoading] = useState(true);
+  const [stickFigureImage, setStickFigureImage] = useState<string | null>(null);
+  const [stickFigureLoading, setStickFigureLoading] = useState(true);
 
   const [boundariesImage, setBoundariesImage] = useState<string | null>(null);
   const [boundariesLoading, setBoundariesLoading] = useState(true);
@@ -52,7 +55,7 @@ export default function Constellations({
 
   const [applyLoading, setApplyLoading] = useState(false);
   const [filterType, setFilterType] = useState(
-    constellationMode === "boundaries" ? "boundaries" : "shape",
+    constellationType === "importedBoundaries" ? "boundaries" : "stickFigure",
   );
 
   const [customOrderOn, setCustomOrderOn] = useState(false);
@@ -61,70 +64,95 @@ export default function Constellations({
   const [lines, setLines] = useState<[number, number][]>([]);
   const [interactiveLoading, setInteractiveLoading] = useState(false);
 
-  // Fetch stick figure on first load
-  useEffect(() => {
+  const fetchStickFigure = async () => {
+    try {
+      const response = await apiRequest(`${constellationsAPI}/get-and-plot/`, {
+        name: dataName,
+        n_stars: nStars,
+        stick_figure: true,
+      });
 
-    if (constellationMode !== 'both') return
+      setStickFigureImage(`data:image/svg+xml;base64,${response.image}`);
+    } catch (error) {
+      console.error("Failed to fetch stick figure plot:", error);
+    } finally {
+      setStickFigureLoading(false);
+    }
+  };
 
-    const fetchShape = async () => {
-      try {
-        const response = await apiRequest(
-          `${constellationsAPI}/get-and-plot/`,
-          {
-            name: dataName,
-            n_stars: nStars,
-            stick_figure: true,
-          },
-        );
+  const fetchBoundaries = async () => {
+    try {
+      const response = await apiRequest(`${constellationsAPI}/get-and-plot/`, {
+        name: dataName,
+        n_stars: nStars,
+        stick_figure: false,
+      });
 
-        setShapeImage(`data:image/svg+xml;base64,${response.image}`);
-      } catch (error) {
-        console.error("Failed to fetch stick figure plot:", error);
-      } finally {
-        setShapeLoading(false);
+      setBoundariesImage(`data:image/svg+xml;base64,${response.image}`);
+    } catch (error) {
+      console.error("Failed to fetch boundaries plot:", error);
+    } finally {
+      setBoundariesLoading(false);
+    }
+  };
+
+  const fetchImported = async () => {
+    if (dataRef === undefined) {
+      console.error(
+        "Plot requested for imported data but dataRef is undefined",
+      );
+      return;
+    }
+
+    try {
+      const response = await apiRequest(`${constellationsAPI}/plot/`, {
+        file_ref: dataRef,
+      });
+
+      if (constellationType === "importedStickFigure") {
+        setStickFigureImage(response.image);
+      } else {
+        setBoundariesImage(response.image);
       }
-    };
-    fetchShape();
+    } catch (error) {
+      console.error("Failed to plot imported data:", error);
+    } finally {
+      if (constellationType === "importedStickFigure") {
+        setStickFigureLoading(false);
+      } else {
+        setBoundariesLoading(false);
+      }
+    }
+  };
+
+  // Fetch relevant plot(s) on first load
+  useEffect(() => {
+    if (constellationType === "constellation") {
+      fetchStickFigure();
+      fetchBoundaries();
+    } else if (constellationType === "asterism") {
+      fetchStickFigure();
+    } else if (
+      constellationType === "importedStickFigure" ||
+      constellationType === "importedBoundaries"
+    ) {
+      fetchImported();
+    }
   }, []);
 
-  // fetch boundaries plot on first load + whenever nStars changes
+  // re-fetch boundaries plot whenever nStars changes
   useEffect(() => {
-    if (constellationMode !== 'both') return;
+
+    if (!["constellation", "importedBoundaries"].includes(constellationType))
+      // Don't fetch boundaries if this is asterism or imported stick figure
+      return;
 
     const num = Number(nStars);
     if (isNaN(num) || num < 1 || num > MAX_STARS || !Number.isInteger(num)) {
       return; // don't plot if input is invalid
     }
-
-    const fetchBoundaries = async () => {
-      try {
-        const response = await apiRequest(
-          `${constellationsAPI}/get-and-plot/`,
-          {
-            name: dataName,
-            n_stars: nStars,
-            stick_figure: false,
-          },
-        );
-
-        setBoundariesImage(`data:image/svg+xml;base64,${response.image}`);
-      } catch (error) {
-        console.error("Failed to fetch boundaries plot:", error);
-      } finally {
-        setBoundariesLoading(false);
-      }
-    };
     fetchBoundaries();
   }, [nStars]);
-
-  useEffect(() => {
-    const fetchImportedPlot = async () => {
-      if (constellationMode === 'stickFigure') {
-        setShapeLoading(true);
-        
-      }
-    }
-  }, [])
 
   useEffect(() => {
     if (!customOrderOn) return;
@@ -136,11 +164,14 @@ export default function Constellations({
     setInteractiveLoading(true);
 
     const endpoint = `${constellationsAPI}/get-plotting-data/`;
-    const payload = {
-      name: dataName,
-      stick_figure: true,
-      n_stars: nStars,
-    };
+    const payload =
+      constellationType === "importedStickFigure"
+        ? {
+            file_ref: dataRef,
+          }
+        : {
+            name: dataName,
+          };
 
     const result = await apiRequest(endpoint, payload);
 
@@ -154,10 +185,14 @@ export default function Constellations({
 
     const endpoint = `${constellationsAPI}/save-refined/`;
     const payload = {
-      name: dataName,
-      stick_figure: filterType === "shape",
+      ...(["importedStickFigure", "importedBoundaries"].includes(
+        constellationType,
+      )
+        ? { file_ref: dataRef }
+        : { name: dataName }),
+      stick_figure: filterType === "stickFigure",
       n_stars: nStars,
-      ...(filterType === "shape" && { order: order }),
+      ...(filterType === "stickFigure" && { order }),
     };
 
     const result = await apiRequest(endpoint, payload);
@@ -167,7 +202,7 @@ export default function Constellations({
         newRef: result.file_ref,
         newRa: result.ra,
         newDec: result.dec,
-        nStars: filterType === "boundaries" ? Number(nStars) : undefined
+        nStars: filterType === "boundaries" ? Number(nStars) : undefined,
       });
     }
     setApplyLoading(false);
@@ -175,34 +210,42 @@ export default function Constellations({
 
   const cards = [
     {
-      value: "shape",
+      value: "stickFigure",
       title: "Stick Figure",
       description: `Sonify the stars that make up the classic shape of ${dataName}`,
       icon: <LuWaypoints />,
+      disabled: constellationType === "importedBoundaries",
+      disabledTip:
+        "Stick figure not available for an imported constellation which used boundaries",
     },
-    ...(!isAsterism
-      ? [
-          {
-            value: "boundaries",
-            title: "Boundaries",
-            description: (
-              <>
-                Sonify the brightest stars within the{" "}
-                <Link
-                  href="https://en.wikipedia.org/wiki/IAU_designated_constellations"
-                  color="teal.500"
-                  textDecoration="underline"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  constellation boundaries
-                </Link>
-              </>
-            ),
-            icon: <LuSquareDashed />,
-          },
-        ]
-      : []),
+    {
+      value: "boundaries",
+      title: "Boundaries",
+      description: (
+        <>
+          Sonify the brightest stars within the{" "}
+          <Link
+            href="https://en.wikipedia.org/wiki/IAU_designated_constellations"
+            color="teal.500"
+            textDecoration="underline"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            constellation boundaries
+          </Link>
+        </>
+      ),
+      icon: <LuSquareDashed />,
+      disabled: ["asterism", "importedStickFigure"].includes(
+        constellationType,
+      ),
+      disabledTip: `Boundaries not available for 
+      ${
+        constellationType === "asterism"
+          ? "asterisms (some span multiple constellation boundaries!)"
+          : "an imported constellation which used stick figure previously"
+      }`,
+    },
   ];
 
   // Track whether or not to disable the continue button
@@ -215,7 +258,9 @@ export default function Constellations({
 
   // whether a user has clicked on all of the stars yet (if picking custom order)
   const unselectedStars =
-    filterType === "shape" && customOrderOn && order.length !== stars.length;
+    filterType === "stickFigure" &&
+    customOrderOn &&
+    order.length !== stars.length;
 
   return (
     <Stack
@@ -233,27 +278,34 @@ export default function Constellations({
           >
             <Stack align="stretch" direction={{ base: "column", md: "row" }}>
               {cards.map((card) => (
-                <RadioCard.Item key={card.value} value={card.value}>
-                  <RadioCard.ItemHiddenInput />
-                  <RadioCard.ItemControl>
-                    <RadioCard.ItemContent>
-                      <Icon size="xl" color="fg.muted" mb="2">
-                        {card.icon}
-                      </Icon>
-                      <RadioCard.ItemText textStyle="md">
-                        {card.title}
-                      </RadioCard.ItemText>
-                      <RadioCard.ItemDescription>
-                        {card.description}
-                      </RadioCard.ItemDescription>
-                    </RadioCard.ItemContent>
-                    <RadioCard.ItemIndicator />
-                  </RadioCard.ItemControl>
-                </RadioCard.Item>
+                <Tooltip disabled={!card.disabled} content={card.disabledTip}>
+                  <RadioCard.Item
+                    key={card.value}
+                    value={card.value}
+                    disabled={card.disabled}
+                    cursor={card.disabled ? 'disabled' : 'default'}
+                  >
+                    <RadioCard.ItemHiddenInput />
+                    <RadioCard.ItemControl>
+                      <RadioCard.ItemContent>
+                        <Icon size="xl" color="fg.muted" mb="2">
+                          {card.icon}
+                        </Icon>
+                        <RadioCard.ItemText textStyle="md">
+                          {card.title}
+                        </RadioCard.ItemText>
+                        <RadioCard.ItemDescription>
+                          {card.description}
+                        </RadioCard.ItemDescription>
+                      </RadioCard.ItemContent>
+                      <RadioCard.ItemIndicator />
+                    </RadioCard.ItemControl>
+                  </RadioCard.Item>
+                </Tooltip>
               ))}
             </Stack>
           </RadioCard.Root>
-          {filterType === "shape" && (
+          {filterType === "stickFigure" && (
             <HStack>
               <CheckboxCard.Root
                 colorPalette="teal"
@@ -328,7 +380,7 @@ export default function Constellations({
       </Box>
       <Box flex="1">
         <Box flex="1" borderWidth="1px" borderRadius="md">
-          {filterType === "shape" &&
+          {filterType === "stickFigure" &&
             (customOrderOn ? (
               interactiveLoading ? (
                 <LoadingMessage msg="" icon="pulsar" />
@@ -364,11 +416,11 @@ export default function Constellations({
                   </Flex>
                 </>
               )
-            ) : shapeLoading ? (
+            ) : stickFigureLoading ? (
               <LoadingMessage msg="" icon="pulsar" />
-            ) : shapeImage ? (
+            ) : stickFigureImage ? (
               <Image
-                src={shapeImage}
+                src={stickFigureImage}
                 alt={`The stick figure shape of ${dataName}.`}
                 animation="fade-in 300ms ease-out"
                 rounded="md"

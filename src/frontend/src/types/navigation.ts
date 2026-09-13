@@ -14,6 +14,6 @@ export interface NavigationState {
     layers?: Layer[];
     layerID?: string;
     idColumn?: string | null;
-    isAsterism?: boolean;
+    constellationType?: 'constellation' | 'asterism' | 'importedStickFigure' | 'importedBoundaries'
     nStars?: number;
   }

@@ -9,7 +9,7 @@ export interface ApplyResult {
 export interface RefineMenuProps {
   dataRef: string;
   dataName?: string;
-  constellationMode?: 'stickFigure' | 'boundaries' | 'both'
+  constellationType?: 'constellation' | 'asterism' | 'importedStickFigure' | 'importedBoundaries'
   idColumn?: string | null;
   onApply?: (result: ApplyResult) => void;
 }

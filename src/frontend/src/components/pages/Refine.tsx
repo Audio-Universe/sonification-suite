@@ -18,7 +18,7 @@ export default function Refine() {
   const dec = location.state.dec ?? null;
   const layerID = location.state.layerID ?? null;
   const idColumn = location.state.idColumn ?? null;
-  const constellationMode = location.state.constellationMode;
+  const constellationType = location.state.constellationType;
 
   // Dynamically import the menu component
   const Menu = lazy(() => import(`../refine_menus/${soniType}.tsx`));
@@ -37,7 +37,7 @@ export default function Refine() {
         <Menu
           dataRef={sourceDataRef}
           dataName={dataName}
-          constellationMode={constellationMode}
+          constellationType={constellationType}
           idColumn={idColumn}
           onApply={(result: ApplyResult) => {
             const { newRef, idColumn, newRa, newDec, nStars } = result;

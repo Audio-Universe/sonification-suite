@@ -548,6 +548,7 @@ export default function Lightcurves() {
                             >
                               <Tooltip content="View plot">
                                 <Button
+                                
                                   size="xs"
                                   tabIndex={0}
                                   aria-label={`View plot for ${star.name}`}

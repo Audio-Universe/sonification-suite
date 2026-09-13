@@ -100,7 +100,7 @@ export default function Constellations() {
     const state: NavigationState = {
       dataName: item.value,
       soniType,
-      isAsterism: item.category === 'Asterisms',
+      constellationType: item.category === 'Asterisms' ? 'asterism' : 'constellation',
     };
 
     navigate("../refine", { state });

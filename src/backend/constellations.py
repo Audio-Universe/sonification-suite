@@ -137,7 +137,7 @@ async def plot_csv(data: DataRequest):
     df = df.set_index('hip')
 
     # Use the flag added at Refine step to determine whether to draw lines
-    stick_figure = df['stick_figure'].iloc[0]
+    stick_figure = bool(df['stick_figure'].iloc[0])
 
     image = plot_and_format_constellation(df, stick_figure)
 
@@ -317,10 +317,17 @@ async def list_patterns():
 
 @router.post("/get-plotting-data/")
 async def get_plotting_data(request: ConstellationRequest):
-    stars = get_constellation(
-        request.name,
-        stick_figure=True
-    )
+    
+    if request.file_ref:
+        # It's an imported constellation (user has re-uploaded a dataset from the Suite)
+        imported_data_path = str(resolve_file(request.file_ref))
+        stars = pd.read_csv(imported_data_path)
+    else:
+        # It's a constellation from within the Suite
+        stars = get_constellation(
+            request.name,
+            stick_figure=True
+        )
 
     pattern_name = get_pattern_from_df(stars.set_index("hip"))
     edges = PATTERNS[pattern_name]['edges'] if pattern_name else []
@@ -427,7 +434,12 @@ def constellation_center(df: pd.DataFrame):
 async def save_refined(request: ConstellationRequest):
 
     # get and sort constellation/asterism stars
-    stars = get_constellation(request.name, request.stick_figure)
+    if request.file_ref:
+        imported_data_path = str(resolve_file(request.file_ref))
+        stars = pd.read_csv(imported_data_path)
+    else:   
+        stars = get_constellation(request.name, request.stick_figure)
+        
     refined_stars = stars.head(request.n_stars).copy() if not request.stick_figure else stars
 
     if request.stick_figure:
