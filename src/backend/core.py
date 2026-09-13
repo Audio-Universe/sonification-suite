@@ -642,11 +642,14 @@ def round_range(range: list, dp: int = 2) -> list:
 
 
 @router.get('/get-inputs/')
-def get_inputs(file_ref: str, soni_type: str, user_upload: bool = False ):
+def get_inputs(file_ref: str, soni_type: str):
     
     filepath = str(resolve_file(file_ref))
     
-    if filepath.endswith('.csv') and user_upload:
+    if not filepath.endswith('.csv'):
+        raise HTTPException(status_code=400, detail='File is not CSV, cannot read inputs')
+    
+    if soni_type == 'data_composer':
         df = pd.read_csv(filepath, header=0)
         
         # Find which columns contain numeric data

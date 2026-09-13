@@ -34,9 +34,11 @@ import { ClickableConstellation, Star } from "../ui/ClickableConstellation";
 export default function Constellations({
   dataRef,
   dataName,
-  isAsterism,
+  constellationMode,
   onApply,
 }: RefineMenuProps) {
+
+
   // const [imageSrc, setImageSrc] = useState<string | null>(null);
   const [shapeImage, setShapeImage] = useState<string | null>(null);
   const [shapeLoading, setShapeLoading] = useState(true);
@@ -49,7 +51,9 @@ export default function Constellations({
   const MAX_STARS = 300;
 
   const [applyLoading, setApplyLoading] = useState(false);
-  const [filterType, setFilterType] = useState<string | null>("shape");
+  const [filterType, setFilterType] = useState(
+    constellationMode === "boundaries" ? "boundaries" : "shape",
+  );
 
   const [customOrderOn, setCustomOrderOn] = useState(false);
   const [order, setOrder] = useState<number[]>([]);
@@ -59,6 +63,9 @@ export default function Constellations({
 
   // Fetch stick figure on first load
   useEffect(() => {
+
+    if (constellationMode !== 'both') return
+
     const fetchShape = async () => {
       try {
         const response = await apiRequest(
@@ -66,7 +73,7 @@ export default function Constellations({
           {
             name: dataName,
             n_stars: nStars,
-            by_shape: true,
+            stick_figure: true,
           },
         );
 
@@ -82,6 +89,8 @@ export default function Constellations({
 
   // fetch boundaries plot on first load + whenever nStars changes
   useEffect(() => {
+    if (constellationMode !== 'both') return;
+
     const num = Number(nStars);
     if (isNaN(num) || num < 1 || num > MAX_STARS || !Number.isInteger(num)) {
       return; // don't plot if input is invalid
@@ -94,7 +103,7 @@ export default function Constellations({
           {
             name: dataName,
             n_stars: nStars,
-            by_shape: false,
+            stick_figure: false,
           },
         );
 
@@ -109,6 +118,15 @@ export default function Constellations({
   }, [nStars]);
 
   useEffect(() => {
+    const fetchImportedPlot = async () => {
+      if (constellationMode === 'stickFigure') {
+        setShapeLoading(true);
+        
+      }
+    }
+  }, [])
+
+  useEffect(() => {
     if (!customOrderOn) return;
     if (lines.length > 0 && stars.length > 0) return;
     plotInteractive();
@@ -120,7 +138,7 @@ export default function Constellations({
     const endpoint = `${constellationsAPI}/get-plotting-data/`;
     const payload = {
       name: dataName,
-      by_shape: true,
+      stick_figure: true,
       n_stars: nStars,
     };
 
@@ -137,7 +155,7 @@ export default function Constellations({
     const endpoint = `${constellationsAPI}/save-refined/`;
     const payload = {
       name: dataName,
-      by_shape: filterType === "shape",
+      stick_figure: filterType === "shape",
       n_stars: nStars,
       ...(filterType === "shape" && { order: order }),
     };
@@ -211,7 +229,7 @@ export default function Constellations({
           <RadioCard.Root
             value={filterType}
             colorPalette="teal"
-            onValueChange={(e) => setFilterType(e.value)}
+            onValueChange={(e) => setFilterType(e.value!)}
           >
             <Stack align="stretch" direction={{ base: "column", md: "row" }}>
               {cards.map((card) => (

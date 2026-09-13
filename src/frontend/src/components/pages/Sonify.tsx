@@ -41,10 +41,10 @@ import {
 import {
   LuAudioLines,
   LuLocateFixed,
-  LuDatabase,
   LuCircleHelp,
   LuSlidersVertical,
   LuRotateCcw,
+  LuChartSpline,
 } from "react-icons/lu";
 import { plotData } from "../../utils/plot";
 import ObserverSetup, {
@@ -76,7 +76,6 @@ export default function Sonify() {
   const styleDescription = location.state.styleDescription;
   const styleRef = location.state.styleRef;
   const soniType = location.state.soniType;
-  const userUpload = location.state.userUpload;
   const ra = location.state.ra ?? null;
   const dec = location.state.dec ?? null;
 
@@ -312,7 +311,6 @@ export default function Sonify() {
       soniType,
       ra,
       dec,
-      userUpload,
       editStyle: styleRef,
     };
     navigate("../style", { state });
@@ -735,7 +733,7 @@ export default function Sonify() {
                       </>
                     ) : (
                       <>
-                        <LuDatabase /> Data
+                        <LuChartSpline /> Data
                       </>
                     )}
                   </HStack>
@@ -743,7 +741,7 @@ export default function Sonify() {
                 <SegmentGroup.ItemHiddenInput />
               </SegmentGroup.Item>
               <Tooltip
-                content="Generate the sonification to view its spectrogram"
+                content="Generate sonification to view spectrogram"
                 disabled={specLoading || specImage !== null}
               >
                 <SegmentGroup.Item

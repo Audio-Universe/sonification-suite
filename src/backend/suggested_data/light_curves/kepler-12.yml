@@ -1,8 +1,8 @@
-name: 'Kepler-12'
+name: "Kepler 12"
 
-description: This light curve contains dips in brightness as orbiting planet Kepler-12b passes the star.
+description: "Strong transit signals every 4.4 days from the Hot Jupiter planet Kepler-12b."
 
-ra: 286.24342526404
-dec: 50.04035326724
+ra: 286.2434
+dec: 50.0404
 
 category: "exoplanet"

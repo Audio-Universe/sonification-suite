@@ -372,7 +372,7 @@ export default function Lightcurves() {
                   <Link
                     href="https://simbad.cds.unistra.fr/simbad/"
                     aria-label="Go to SIMBAD database in new tab"
-                    colorPalette="teal"
+                    color="teal.600"
                     target="_blank"
                     rel="noopener noreferrer"
                   >
@@ -381,14 +381,16 @@ export default function Lightcurves() {
                   )
                 </Field.HelperText>
               </Field.Root>
-              <Button
-                alignSelf="flex-start"
-                variant="outline"
-                onClick={() => setShowFilters(!showFilters)}
-                aria-label="Show filters"
-              >
-                <LuSlidersHorizontal />
-              </Button>
+              <Tooltip content="Filters">
+                <Button
+                  alignSelf="flex-start"
+                  variant="outline"
+                  onClick={() => setShowFilters(!showFilters)}
+                  aria-label="Show filters"
+                >
+                  <LuSlidersHorizontal />
+                </Button>
+              </Tooltip>
             </HStack>
             {/* Collapsible filters */}
             <Collapsible.Root open={showFilters}>
@@ -479,7 +481,13 @@ export default function Lightcurves() {
 
               <Tabs.List>
                 {Object.keys(categoryNames).map((category) => (
-                  <Tabs.Trigger value={category} key={category} fontWeight='bold'>
+                  <Tabs.Trigger
+                    value={category}
+                    key={category}
+                    fontWeight="bold"
+                    _hover={{ color: "fg" }}
+                    transition="0.15s ease"
+                  >
                     {categoryNames[category]}
                   </Tabs.Trigger>
                 ))}

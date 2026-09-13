@@ -10,7 +10,6 @@ export interface NavigationState {
     styleDescription?: string;
     ra?: number | null;
     dec?: number | null;
-    userUpload?: boolean;
     editStyle?: string;
     layers?: Layer[];
     layerID?: string;

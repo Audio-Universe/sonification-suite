@@ -1,0 +1,8 @@
+name: "RR Lyrae"
+
+description: "The prototype of this highly variable star class, which are used as standard candles to measure distances."
+
+ra: 291.3663
+dec: 42.7844
+
+category: "pulsating"

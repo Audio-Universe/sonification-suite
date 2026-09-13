@@ -21,7 +21,6 @@ export default function Style() {
   const soniType = location.state.soniType;
   const ra = location.state.ra ?? null;
   const dec = location.state.dec ?? null;
-  const userUpload = location.state.userUpload;
   const layerID = location.state.layerID ?? null;
   const editStyle = location.state.editStyle ?? null;
   const nStars = location.state.nStars ?? 0;
@@ -111,7 +110,6 @@ export default function Style() {
       styleName,
       styleDescription,
       soniType,
-      userUpload,
       ra,
       dec,
     };
@@ -223,7 +221,6 @@ export default function Style() {
         onOpenChange={setCustomOpen}
         soniType={soniType}
         dataRef={dataRef}
-        userUpload={userUpload}
         onStyleCreated={handleStyleCreated}
         editStyle={editStyle}
       />

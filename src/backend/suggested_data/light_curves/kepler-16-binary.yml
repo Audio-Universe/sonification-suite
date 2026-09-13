@@ -1,0 +1,8 @@
+name: "Kepler 16"
+
+description: "Two stars transit each other causing pairs of period dips. A planet is also in this system."
+
+ra: 289.07571
+dec: 51.757439
+
+category: "binary"

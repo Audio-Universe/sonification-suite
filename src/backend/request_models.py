@@ -51,7 +51,7 @@ class VolumeRequest(BaseModel):
     
 class ConstellationRequest(BaseModel):
     name: str
-    by_shape: bool = True
+    stick_figure: bool = True
     n_stars: int
     order: Optional[list[int]] = None
 

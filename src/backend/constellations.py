@@ -94,7 +94,7 @@ def _get_pattern(pattern_name: str) -> dict:
         raise HTTPException(status_code=404, detail=f"Unknown constellation or asterism: '{pattern_name}'")
 
 
-def get_constellation(pattern_name: str, by_shape: bool = True) -> pd.DataFrame:
+def get_constellation(pattern_name: str, stick_figure: bool = True) -> pd.DataFrame:
 
     pattern = _get_pattern(pattern_name)
 
@@ -102,15 +102,15 @@ def get_constellation(pattern_name: str, by_shape: bool = True) -> pd.DataFrame:
     df = pd.read_csv(HYG_DATA)
 
     # Asterisms have no IAU boundary, so they're always filtered by shape
-    # membership regardless of the by_shape flag.
-    if by_shape or pattern['type'] == 'asterism':
+    # membership regardless of the stick_figure flag.
+    if stick_figure or pattern['type'] == 'asterism':
         star_ids = {hip for edge in pattern['edges'] for hip in edge}
         stars_in_pattern = df[df['hip'].isin(star_ids)].copy()
     else:
         if not pattern['iau']:
             raise HTTPException(
                 status_code=400,
-                detail=f"'{pattern_name}' has no IAU boundary data; only official constellations support by_shape=False"
+                detail=f"'{pattern_name}' has no IAU boundary data; only official constellations support stick_figure=False"
             )
         # Filter by constellation boundaries
         stars_in_pattern = df[df['con'] == pattern['iau']].copy()
@@ -126,6 +126,7 @@ def get_constellation(pattern_name: str, by_shape: bool = True) -> pd.DataFrame:
 
 @router.post("/plot/")
 async def plot_csv(data: DataRequest):
+    # Plotting endpoint used by the final 'Sonify' page
 
     data_filepath = str(resolve_file(data.file_ref))
 
@@ -135,9 +136,10 @@ async def plot_csv(data: DataRequest):
     df = pd.read_csv(data_filepath)
     df = df.set_index('hip')
 
-    by_shape = data.file_ref.split('.')[-2].endswith('shape')
+    # Use the flag added at Refine step to determine whether to draw lines
+    stick_figure = df['stick_figure'].iloc[0]
 
-    image = plot_and_format_constellation(df, by_shape)
+    image = plot_and_format_constellation(df, stick_figure)
 
     return {'image': image}
 
@@ -317,7 +319,7 @@ async def list_patterns():
 async def get_plotting_data(request: ConstellationRequest):
     stars = get_constellation(
         request.name,
-        by_shape=True
+        stick_figure=True
     )
 
     pattern_name = get_pattern_from_df(stars.set_index("hip"))
@@ -349,16 +351,16 @@ async def plot_constellation(request: ConstellationRequest):
     try:
 
         # select constellation or asterism
-        stars_sorted = get_constellation(request.name, by_shape=request.by_shape)
+        stars_sorted = get_constellation(request.name, stick_figure=request.stick_figure)
 
         # choose top N stars if not filtering by shape
         N = request.n_stars
-        filtered_stars = stars_sorted.head(N).copy() if not request.by_shape else stars_sorted
+        filtered_stars = stars_sorted.head(N).copy() if not request.stick_figure else stars_sorted
 
         # Index by hipparcos ID
         filtered_stars = filtered_stars.set_index('hip')
 
-        image = plot_and_format_constellation(filtered_stars, request.by_shape)
+        image = plot_and_format_constellation(filtered_stars, request.stick_figure)
         
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -425,10 +427,10 @@ def constellation_center(df: pd.DataFrame):
 async def save_refined(request: ConstellationRequest):
 
     # get and sort constellation/asterism stars
-    stars = get_constellation(request.name, request.by_shape)
-    refined_stars = stars.head(request.n_stars).copy() if not request.by_shape else stars
+    stars = get_constellation(request.name, request.stick_figure)
+    refined_stars = stars.head(request.n_stars).copy() if not request.stick_figure else stars
 
-    if request.by_shape:
+    if request.stick_figure:
         if request.order:
             # Add the custom order column
             order_map = {hip: i for i, hip in enumerate(request.order, start=1)}
@@ -441,11 +443,14 @@ async def save_refined(request: ConstellationRequest):
 
     # compute 'center' of constellation for optional 'Place on Dome' feature
     ra, dec = constellation_center(refined_stars)
+    
+    # add 'stick_figure' boolean flag to know which refine options to give in the case the data is re-uploaded by user
+    # also used to determine which plot to show on the final Sonify page
+    refined_stars["stick_figure"] = request.stick_figure
 
-    # save to tmp directory (overwriting any existing dataset)
+    # save to tmp directory (overwriting any existing dataset to save disk space)
     session_id = session_id_var.get()
-    suffix = '_shape' if request.by_shape else ''
-    filename = f'{request.name}{suffix}.csv'
+    filename = f'{SONI_TYPE}.csv'
     filepath = TMP_DIR / session_id / filename
     refined_stars.to_csv(filepath, index=False)
 

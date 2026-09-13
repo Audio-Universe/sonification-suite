@@ -46,7 +46,6 @@ interface CustomStyleMenuProps {
   onOpenChange: (open: boolean) => void;
   soniType: string;
   dataRef: string;
-  userUpload: boolean;
   onStyleCreated: (
     styleRef: string,
     styleName?: string,
@@ -60,7 +59,6 @@ export default function CustomStyleMenu({
   onOpenChange,
   soniType,
   dataRef,
-  userUpload,
   onStyleCreated,
   editStyle,
 }: CustomStyleMenuProps) {
@@ -375,7 +373,7 @@ export default function CustomStyleMenu({
       try {
         const [inputs, outputs] = await Promise.all([
           apiRequest(
-            `${coreAPI}/get-inputs/?file_ref=${encodeURIComponent(dataRef)}&soni_type=${soniType}&user_upload=${userUpload}`,
+            `${coreAPI}/get-inputs/?file_ref=${encodeURIComponent(dataRef)}&soni_type=${soniType}`,
             {},
             "GET",
           ) as Promise<ParamMetadata[]>,

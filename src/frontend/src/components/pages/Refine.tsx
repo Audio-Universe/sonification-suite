@@ -16,10 +16,9 @@ export default function Refine() {
   const soniType = location.state.soniType;
   const ra = location.state.ra ?? null;
   const dec = location.state.dec ?? null;
-  const userUpload = location.state.userUpload ?? false;
   const layerID = location.state.layerID ?? null;
   const idColumn = location.state.idColumn ?? null;
-  const isAsterism = location.state.isAsterism ?? false;
+  const constellationMode = location.state.constellationMode;
 
   // Dynamically import the menu component
   const Menu = lazy(() => import(`../refine_menus/${soniType}.tsx`));
@@ -38,7 +37,7 @@ export default function Refine() {
         <Menu
           dataRef={sourceDataRef}
           dataName={dataName}
-          isAsterism={isAsterism}
+          constellationMode={constellationMode}
           idColumn={idColumn}
           onApply={(result: ApplyResult) => {
             const { newRef, idColumn, newRa, newDec, nStars } = result;
@@ -64,7 +63,6 @@ export default function Refine() {
               dataRef: newRef,
               ra: newRa ?? ra,
               dec: newDec ?? dec,
-              userUpload,
               nStars: nStars
             };
             navigate("../style", { state });

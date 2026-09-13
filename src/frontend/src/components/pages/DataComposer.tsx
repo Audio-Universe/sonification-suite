@@ -334,7 +334,6 @@ export default function DataComposer() {
       dataRef: layer.dataRef,
       layerID: layer.id,
       soniType,
-      userUpload: true, // tell custom style menu we are using user data
       ...(editStyleRef !== undefined && { editStyle: editStyleRef }), // Only pass edit style if provided (e.g. user has clicked the edit button)
     };
     navigate("style", { state });

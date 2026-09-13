@@ -9,7 +9,7 @@ export interface ApplyResult {
 export interface RefineMenuProps {
   dataRef: string;
   dataName?: string;
-  isAsterism?: boolean;
+  constellationMode?: 'stickFigure' | 'boundaries' | 'both'
   idColumn?: string | null;
   onApply?: (result: ApplyResult) => void;
 }
