@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File, Cookie, Response, Request, BackgroundTasks
+from fastapi import APIRouter, HTTPException, UploadFile, File, Cookie, Response, Request, BackgroundTasks, Form
 from fastapi.responses import FileResponse
 from pathlib import Path
 from paths import TMP_DIR, STYLE_FILES_DIR, SUGGESTED_DATA_DIR, SYNTHS_DIR, SAMPLES_DIR
@@ -232,7 +232,10 @@ def generate_sonification(request: SonificationRequest, connection: Request):
     
     filename = 'audio_figure.wav'
     filepath = session_dir / filename
-    fig.save(filepath)
+    
+    # Set master volume to maximum of layer volumes
+    master_volume = max([layer.volume for layer in request.layers])
+    fig.save(filepath, master_volume=master_volume)
     
     log_event(session_id=session_id, ip=connection.client.host, event='sonification_generated', sonification_type=request.soni_type)
     cleanup_old_layers(session_id, n_layers)
@@ -513,14 +516,15 @@ def download_file(file_ref: str, name: str | None = None):
 
 
 @router.post('/upload-data/')
-async def upload_data(file: UploadFile, request: Request):
+async def upload_data(request: Request, file: UploadFile, soni_type: str | None = Form(None)):
     """
     Function for the user to upload their own data to the system, which is then written
     to the tmp directory. The maximum file size is 10mb, as this is a limit set in nginx.
 
-    - **file**: The user-uploaded data file.
+    - **upload**: The user-uploaded data file and (optionally) the sonification type.
     - Returns: The filepath of the saved data file.
     """
+
 
     # Client details for logging
     ip = request.client.host
@@ -594,48 +598,102 @@ async def upload_data(file: UploadFile, request: Request):
             ip
             )
             raise HTTPException(415, "Invalid CSV file")
+        
+    
+    if soni_type:
+        file_ref, import_info = validate_import(contents, soni_type, Path(file.filename).stem)
+    else:
+        
+        # Ensure session directory exists
+        session_dir = os.path.join(TMP_DIR, session_id)
+        os.makedirs(session_dir, exist_ok=True)
+            
+        # Ensure uploads directory exists
+        uploads_dir = os.path.join(session_dir, 'uploads')
+        os.makedirs(uploads_dir, exist_ok=True)
+        
+        # Check session's upload quota
+        current_usage = get_uploads_dir_size(uploads_dir)
+        if current_usage + len(contents) > UPLOAD_QUOTA_BYTES:
+            LOG.warning(
+                "Upload rejected | reason=quota_exceeded | usage=%d | file_size=%d | session=%s | ip=%s",
+                current_usage,
+                len(contents),
+                session_id,
+                ip
+            )
+            raise HTTPException(429, f"Session upload quota of {UPLOAD_QUOTA_MB}MB exceeded")
 
-    # Ensure session directory exists
-    session_dir = os.path.join(TMP_DIR, session_id)
-    os.makedirs(session_dir, exist_ok=True)
-    
-    # Ensure uploads directory exists
-    uploads_dir = os.path.join(session_dir, 'uploads')
-    os.makedirs(uploads_dir, exist_ok=True)
-    
-    # Check session's upload quota
-    current_usage = get_uploads_dir_size(uploads_dir)
-    if current_usage + len(contents) > UPLOAD_QUOTA_BYTES:
-        LOG.warning(
-            "Upload rejected | reason=quota_exceeded | usage=%d | file_size=%d | session=%s | ip=%s",
-            current_usage,
+        # Create random ID to store file under
+        new_name = f"{uuid.uuid4()}.csv"
+        filepath = os.path.join(uploads_dir, new_name)
+        
+        # Write to new csv file
+        with open(filepath, "wb") as f:
+            f.write(contents)
+
+        LOG.info(
+            "Upload success | original=%s | stored=%s | size=%d | session=%s | ip=%s",
+            file.filename,
+            new_name,
             len(contents),
             session_id,
             ip
         )
-        raise HTTPException(429, f"Session upload quota of {UPLOAD_QUOTA_MB}MB exceeded")
 
-    # Create random ID to store file under
-    new_name = f"{uuid.uuid4()}.csv"
-    filepath = os.path.join(uploads_dir, new_name)
+        file_ref = f"session:uploads:{new_name}"
+        import_info = None
+
+    return {"file_ref": file_ref, "import_info": import_info}
+
+
+def validate_import(file_contents: bytes, soni_type: str, filename: str):
     
-    # Write to new csv file
-    with open(filepath, "wb") as f:
-        f.write(contents)
+    formatted_types = {
+        'light_curves': 'light curve',
+        'constellations': 'constellation',
+        'night_sky': 'night sky'
+    }
+    
+    if soni_type not in formatted_types.keys():
+        raise HTTPException(status_code=400, detail=f"Invalid soni_type: {soni_type}")
+    
+    df = pd.read_csv(BytesIO(file_contents))
+    
+    expected_cols = INPUTS[soni_type].keys()
+    
+    # Check that the basic columns for this soni type are a subset of the imported columns
+    if not expected_cols <= set(df.columns):
+        raise HTTPException(status_code=400, detail=f"Imported data appears invalid - are you sure this is a {formatted_types[soni_type]} downloaded from the Suite?")
 
-    LOG.info(
-        "Upload success | original=%s | stored=%s | size=%d | session=%s | ip=%s",
-        file.filename,
-        new_name,
-        len(contents),
-        session_id,
-        ip
-    )
+    import_info= {
+        'data_name': filename,
+    }
 
-    file_ref = f"session:uploads:{new_name}"
+    if soni_type == 'night_sky':
+        import_info['max_magnitude'] = df['magnitude'].max()
+    
+    elif soni_type == 'constellations':
+        import_info['stick_figure'] = bool(df['stick_figure'].iloc[0])
+        import_info['star_count'] = len(df)
 
-    return {"file_ref": file_ref}
+        # Get custom order if there is one in imported data
+        import_info['custom_order'] = (
+            df.sort_values('custom_order')['hip'].tolist()
+            if 'custom_order' in df.columns
+            else None
+        )
+        
+    session_id = session_id_var.get()
+    file_name = f'{soni_type}.csv'
+    file_path = TMP_DIR / session_id / file_name
+    df.to_csv(file_path, index=False)
+    
+    file_ref = f'session:{file_name}'
+    
+    return file_ref, import_info
 
+    
 
 def round_range(range: list, dp: int = 2) -> list:
     return [round(float(v), dp) for v in range]

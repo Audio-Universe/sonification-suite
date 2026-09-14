@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { LuTelescope } from "react-icons/lu";
+import { LuFileUp, LuTelescope } from "react-icons/lu";
 import PageContainer from "../ui/PageContainer";
 import { getImage, randomRange } from "../../utils/assets";
 import { coreAPI, constellationsAPI } from "../../apiConfig";
@@ -32,8 +32,11 @@ import {
   createListCollection,
   useFilter,
   Portal,
+  FileUpload,
 } from "@chakra-ui/react";
 import { NavigationState } from "../../types/navigation";
+import ErrorMsg from "../ui/ErrorMsg";
+import {DataImport, ImportResult} from "../utils/DataImport";
 
 interface PatternListResponse {
   constellations: string[];
@@ -56,6 +59,8 @@ export default function Constellations() {
   const navigate = useNavigate();
 
   const [suggested, setSuggested] = useState<SuggestedPattern[]>([]);
+
+  const [importErrorMessage, setImportErrorMessage] = useState("");
 
   // Fetch suggested constellations on load
   useEffect(() => {
@@ -100,11 +105,26 @@ export default function Constellations() {
     const state: NavigationState = {
       dataName: item.value,
       soniType,
-      constellationType: item.category === 'Asterisms' ? 'asterism' : 'constellation',
+      constellationType:
+        item.category === "Asterisms" ? "asterism" : "constellation",
     };
 
     navigate("../refine", { state });
   };
+
+  const handleImportSuccess = (result: ImportResult) => {
+    const state: NavigationState = {
+      dataName: result.import_info.data_name as string,
+      sourceDataRef: result.file_ref,
+      soniType,
+      constellationType: result.import_info.stick_figure
+        ? "importedStickFigure"
+        : "importedBoundaries",
+      importedNStars: result.import_info.star_count as number,
+      importedOrder: result.import_info.custom_order as number[],
+    };
+    navigate("../refine", { state });
+  }
 
   // Needed to use ComboBox search/filter
   const { contains } = useFilter({ sensitivity: "base" });
@@ -126,10 +146,10 @@ export default function Constellations() {
         Constellations
       </Heading>
       <br />
-      <Text textStyle="lg">
-        Search for a specific constellation or asterism, or choose from the
-        suggestions below
-      </Text>
+      <HStack gap={0}>
+        <Text>Search for a star pattern, pick a suggestion, or</Text>
+        <DataImport soniType={soniType} onImportSuccess={handleImportSuccess} onImportError={setImportErrorMessage}/>
+      </HStack>
       <br />
       <br />
       <Box display="flex" justifyContent="center">
@@ -199,6 +219,14 @@ export default function Constellations() {
         </Combobox.Root>
       </Box>
       <br />
+      {importErrorMessage && (
+        <Box width="fit-content" maxW="100%" mx="auto" mt={3}>
+          <ErrorMsg
+            message={importErrorMessage}
+            onClose={() => setImportErrorMessage("")}
+          />
+        </Box>
+      )}
       <br />
       <Box animation="fade-in 300ms ease-out">
         <Heading size="2xl" as="h2">
@@ -222,7 +250,13 @@ export default function Constellations() {
               cursor="pointer"
               as="button"
               aria-label={`Sonify ${suggestion.name}`}
-              onClick={() => handleSelectPattern({label: suggestion.name, value: suggestion.name, category: suggestion.category})}
+              onClick={() =>
+                handleSelectPattern({
+                  label: suggestion.name,
+                  value: suggestion.name,
+                  category: suggestion.category,
+                })
+              }
             >
               <Box
                 position="relative"

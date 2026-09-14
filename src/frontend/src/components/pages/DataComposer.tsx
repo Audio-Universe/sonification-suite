@@ -354,8 +354,8 @@ export default function DataComposer() {
       <Heading as="h1">Data Composer</Heading>
       <br />
       <Stack direction={{ base: "column", md: "row" }} gap="4">
-        <Text textStyle="lg">
-          Build a layered sonification from your own data.
+        <Text>
+          Build a layered sonification from your own data
         </Text>
         <Link
           onClick={() => setHowItWorksOpen(true)}

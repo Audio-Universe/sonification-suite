@@ -212,7 +212,7 @@ export default function Sonify() {
         ];
 
     const data = {
-      category: soniType,
+      soni_type: soniType,
       layers: soniLayers,
       duration: length,
       system: audioSystem,
@@ -443,7 +443,7 @@ export default function Sonify() {
 
       <Heading as="h1">Sonify</Heading>
       <br />
-      <Text textStyle="lg">
+      <Text>
         Set the length of the sonification and choose the audio system you
         intend to play it on
       </Text>

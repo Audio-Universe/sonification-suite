@@ -18,7 +18,10 @@ export default function Refine() {
   const dec = location.state.dec ?? null;
   const layerID = location.state.layerID ?? null;
   const idColumn = location.state.idColumn ?? null;
-  const constellationType = location.state.constellationType;
+  const constellationType = location.state.constellationType ?? null;
+  const importedNStars = location.state.importedNStars ?? null;
+  const importedOrder = location.state.importedOrder ?? null;
+  const importedMaxMag = location.state.importedMaxMag ?? null;
 
   // Dynamically import the menu component
   const Menu = lazy(() => import(`../refine_menus/${soniType}.tsx`));
@@ -27,7 +30,7 @@ export default function Refine() {
     <PageContainer>
       <Heading as="h1">Refine</Heading>
       <br />
-      <Text textStyle="lg">
+      <Text>
         <Highlight query={dataName} styles={{ color: "teal.600" }}>
           {`Optionally, edit the ${dataName} dataset`}
         </Highlight>
@@ -38,6 +41,9 @@ export default function Refine() {
           dataRef={sourceDataRef}
           dataName={dataName}
           constellationType={constellationType}
+          importedNStars={importedNStars}
+          importedOrder={importedOrder}
+          importedMaxMag={importedMaxMag}
           idColumn={idColumn}
           onApply={(result: ApplyResult) => {
             const { newRef, idColumn, newRa, newDec, nStars } = result;

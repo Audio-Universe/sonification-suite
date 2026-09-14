@@ -35,12 +35,32 @@ export default function Constellations({
   dataRef,
   dataName,
   constellationType,
+  importedNStars,
+  importedOrder,
   onApply,
 }: RefineMenuProps) {
 
   if (!constellationType) {
     throw new Error("Constellations requires constellationType");
   }
+
+  const isImported = ["importedStickFigure", "importedBoundaries"].includes(
+    constellationType,
+  );
+
+  // Helper to use when plotting - we either use a file ref (for imported data) or the pattern name (for constellations from within the Suite)
+  const buildIdentifierPayload = () => {
+    if (isImported) {
+      if (dataRef === undefined) {
+        console.error(
+          "Plot requested for imported data but dataRef is undefined",
+        );
+        return null;
+      }
+      return { file_ref: dataRef };
+    }
+    return { name: dataName };
+  };
 
   // const [imageSrc, setImageSrc] = useState<string | null>(null);
   const [stickFigureImage, setStickFigureImage] = useState<string | null>(null);
@@ -50,28 +70,46 @@ export default function Constellations({
   const [boundariesLoading, setBoundariesLoading] = useState(true);
 
   // number of stars
-  const [nStars, setNStars] = useState("100");
-  const MAX_STARS = 300;
+  const [nStars, setNStars] = useState(() =>
+  // If using an imported boundaries data set, set the default nStars to the number of stars in the data, or 100 (whichever is less)
+    constellationType === "importedBoundaries" &&
+    importedNStars &&
+    importedNStars < 100
+      ? String(importedNStars)
+      : "100",
+  );
+
+  const maxStars =
+  // Similarly, set the maximum number of stars to the number of stars in imported dataset (if using)
+    constellationType === "importedBoundaries" && importedNStars
+      ? importedNStars
+      : 300;
 
   const [applyLoading, setApplyLoading] = useState(false);
   const [filterType, setFilterType] = useState(
     constellationType === "importedBoundaries" ? "boundaries" : "stickFigure",
   );
 
-  const [customOrderOn, setCustomOrderOn] = useState(false);
-  const [order, setOrder] = useState<number[]>([]);
+  // Interactive plot - default 'on' if using an imported dataset with custom order
+  const [customOrderOn, setCustomOrderOn] = useState(!!importedOrder && importedOrder.length > 0);
+
+  const [order, setOrder] = useState<number[]>(importedOrder ?? []);
   const [stars, setStars] = useState<Star[]>([]);
   const [lines, setLines] = useState<[number, number][]>([]);
   const [interactiveLoading, setInteractiveLoading] = useState(false);
 
   const fetchStickFigure = async () => {
+    const identifier = buildIdentifierPayload();
+    if (!identifier) {
+      setStickFigureLoading(false);
+      return;
+    }
     try {
       const response = await apiRequest(`${constellationsAPI}/get-and-plot/`, {
-        name: dataName,
+        ...identifier,
         n_stars: nStars,
         stick_figure: true,
       });
-
       setStickFigureImage(`data:image/svg+xml;base64,${response.image}`);
     } catch (error) {
       console.error("Failed to fetch stick figure plot:", error);
@@ -81,13 +119,17 @@ export default function Constellations({
   };
 
   const fetchBoundaries = async () => {
+    const identifier = buildIdentifierPayload();
+    if (!identifier) {
+      setBoundariesLoading(false);
+      return;
+    }
     try {
       const response = await apiRequest(`${constellationsAPI}/get-and-plot/`, {
-        name: dataName,
+        ...identifier,
         n_stars: nStars,
         stick_figure: false,
       });
-
       setBoundariesImage(`data:image/svg+xml;base64,${response.image}`);
     } catch (error) {
       console.error("Failed to fetch boundaries plot:", error);
@@ -96,59 +138,26 @@ export default function Constellations({
     }
   };
 
-  const fetchImported = async () => {
-    if (dataRef === undefined) {
-      console.error(
-        "Plot requested for imported data but dataRef is undefined",
-      );
-      return;
-    }
-
-    try {
-      const response = await apiRequest(`${constellationsAPI}/plot/`, {
-        file_ref: dataRef,
-      });
-
-      if (constellationType === "importedStickFigure") {
-        setStickFigureImage(response.image);
-      } else {
-        setBoundariesImage(response.image);
-      }
-    } catch (error) {
-      console.error("Failed to plot imported data:", error);
-    } finally {
-      if (constellationType === "importedStickFigure") {
-        setStickFigureLoading(false);
-      } else {
-        setBoundariesLoading(false);
-      }
-    }
-  };
-
-  // Fetch relevant plot(s) on first load
+  // Fetch stick figure on mount if needed
   useEffect(() => {
-    if (constellationType === "constellation") {
-      fetchStickFigure();
-      fetchBoundaries();
-    } else if (constellationType === "asterism") {
-      fetchStickFigure();
-    } else if (
-      constellationType === "importedStickFigure" ||
-      constellationType === "importedBoundaries"
+    if (
+      ["constellation", "asterism", "importedStickFigure"].includes(
+        constellationType,
+      )
     ) {
-      fetchImported();
+      fetchStickFigure();
     }
   }, []);
 
-  // re-fetch boundaries plot whenever nStars changes
+  // Fetch boundaries plot on mount if needed, and re-fetch whenever nStars changes
   useEffect(() => {
 
-    if (!["constellation", "importedBoundaries"].includes(constellationType))
+    if (["asterism", "importedStickFigure"].includes(constellationType))
       // Don't fetch boundaries if this is asterism or imported stick figure
       return;
 
     const num = Number(nStars);
-    if (isNaN(num) || num < 1 || num > MAX_STARS || !Number.isInteger(num)) {
+    if (isNaN(num) || num < 1 || num > maxStars || !Number.isInteger(num)) {
       return; // don't plot if input is invalid
     }
     fetchBoundaries();
@@ -192,7 +201,7 @@ export default function Constellations({
         : { name: dataName }),
       stick_figure: filterType === "stickFigure",
       n_stars: nStars,
-      ...(filterType === "stickFigure" && { order }),
+      ...(filterType === "stickFigure" && customOrderOn && { order }),
     };
 
     const result = await apiRequest(endpoint, payload);
@@ -251,7 +260,7 @@ export default function Constellations({
   // Track whether or not to disable the continue button
   const invalidNStars =
     (filterType === "boundaries" &&
-      (Number(nStars) > MAX_STARS ||
+      (Number(nStars) > maxStars ||
         !Number.isInteger(Number(nStars)) ||
         Number(nStars) < 1)) ||
     nStars.length === 0;
@@ -339,7 +348,7 @@ export default function Constellations({
                 </HStack>
                 <NumberInput.Root
                   min={1}
-                  max={MAX_STARS}
+                  max={maxStars}
                   step={1}
                   value={nStars}
                   onValueChange={(e) => {
@@ -349,8 +358,8 @@ export default function Constellations({
                 >
                   <NumberInput.Input aria-valuetext={`${nStars} stars`} />
                 </NumberInput.Root>
-                {Number(nStars) > 300 && (
-                  <Field.ErrorText>Maximum {MAX_STARS}</Field.ErrorText>
+                {Number(nStars) > maxStars && (
+                  <Field.ErrorText>Maximum {maxStars}</Field.ErrorText>
                 )}
               </Field.Root>
             </HStack>

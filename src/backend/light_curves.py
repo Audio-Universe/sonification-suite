@@ -245,40 +245,36 @@ def get_identifiers(query: StarQuery):
 def download_lightcurve(data_uri):
     """
     This is a shared function used by both /select-lightcurve/ and /plot-lightcurve/.
-    It will give the lightcurve a unique ID, check if it has already been downloaded, and download it as CSV if not.
-    The purpose of this function is to avoid duplicate downloads (for instance, if a user previews the plot and then selects it for download).
+    It will download the light curve to the same location every time, overwriting the previous light curve.
+    This is intentionally to save disk space, as users only every need one light curve file at a time.
 
     - **data_uri**: The URI of the target lightcurve
     - Returns: The CSV filepath of the downloaded lightcurve.
     """
 
-    # Create a unique (but reproducible) hash of the URI
-    uri_hash = hashlib.md5(data_uri.encode()).hexdigest()
-    file_name = f'{uri_hash}.csv'
+    file_name = f'{SONI_TYPE}.csv'
     session_id = session_id_var.get()
     filepath = TMP_DIR / session_id / file_name
+        
+    url = f'https://mast.stsci.edu/api/v0.1/Download/file?uri={data_uri}'
+    lc = lk.read(url)
+    
+    time = lc.time.value
+    flux = lc.flux.value
+    
+    df = pd.DataFrame({
+        "time": np.asarray(time, dtype=np.float64),
+        "flux": np.asarray(flux, dtype=np.float64)
+    })
+    
+    first_valid = df["flux"].first_valid_index()
+    last_valid = df["flux"].last_valid_index()
 
-    if not filepath.exists():
-        
-        url = f'https://mast.stsci.edu/api/v0.1/Download/file?uri={data_uri}'
-        lc = lk.read(url)
-        
-        time = lc.time.value
-        flux = lc.flux.value
-        
-        df = pd.DataFrame({
-            "time": np.asarray(time, dtype=np.float64),
-            "flux": np.asarray(flux, dtype=np.float64)
-        })
-        
-        first_valid = df["flux"].first_valid_index()
-        last_valid = df["flux"].last_valid_index()
-
-        if first_valid is not None and last_valid is not None:
-            # Chop the start and end off if they are NaN
-            df = df.loc[first_valid:last_valid]
-        
-        df.to_csv(filepath, index=False)
+    if first_valid is not None and last_valid is not None:
+        # Chop the start and end off if they are NaN
+        df = df.loc[first_valid:last_valid]
+    
+    df.to_csv(filepath, index=False)
 
     return filepath
 
@@ -304,8 +300,6 @@ def plot_lightcurve(request: DataRequest):
     return {'image': img_base64}
 
 
-
-
 def plot_and_format_lc(path_or_df: str | pd.DataFrame):
     
     df = pd.read_csv(path_or_df) if isinstance(path_or_df, str) else path_or_df
@@ -325,8 +319,8 @@ def plot_and_format_lc(path_or_df: str | pd.DataFrame):
         alpha=0.9
     )
     
-    ax.set_xlabel('Time (days)')
-    ax.set_ylabel('Brightness (Flux - electrons per second)')
+    ax.set_xlabel('Time (Days)')
+    ax.set_ylabel('Brightness (Flux)')
 
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
@@ -433,7 +427,7 @@ def save_refined(request: RefineRequest):
     df, _ = refine_light_curve(request)
  
     session_id = session_id_var.get()
-    filename = request.data_name + '_refined.csv'
+    filename = f'{SONI_TYPE}_refined.csv'
     refined_filepath = TMP_DIR / session_id / filename
     
     df.to_csv(refined_filepath, index=False)

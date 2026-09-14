@@ -9,7 +9,17 @@ export interface ApplyResult {
 export interface RefineMenuProps {
   dataRef: string;
   dataName?: string;
-  constellationType?: 'constellation' | 'asterism' | 'importedStickFigure' | 'importedBoundaries'
+  constellationType?: ConstellationType;
+  importedNStars?: number | null;
+  importedOrder?: number[] | null;
+  importedMaxMag?: number | null;
   idColumn?: string | null;
   onApply?: (result: ApplyResult) => void;
 }
+
+export type ConstellationType =
+  | 'constellation'
+  | 'asterism'
+  | 'importedStickFigure'
+  | 'importedBoundaries'
+  | null;

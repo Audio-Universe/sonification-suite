@@ -178,7 +178,7 @@ def get_star_data(request: NightSkyRequest):
 
     # save to tmp directory (overwriting any existing dataset)
     session_id = session_id_var.get()
-    filename = f'{SONI_TYPE}_full.csv'
+    filename = f'{SONI_TYPE}.csv'
     filepath = TMP_DIR / session_id / filename
     star_data.to_csv(filepath, index=False)
 

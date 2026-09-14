@@ -55,6 +55,7 @@ import {
 } from "@chakra-ui/react";
 import { NavigationState } from "../../types/navigation";
 import { capitaliseWords } from "../../utils/formatting";
+import { DataImport, ImportResult } from "../utils/DataImport";
 
 const soniType = "light_curves";
 
@@ -323,6 +324,15 @@ export default function Lightcurves() {
     navigate("../refine", { state });
   };
 
+  const handleImportSuccess = (result: ImportResult) => {
+      const state: NavigationState = {
+        dataName: result.import_info.data_name as string,
+        sourceDataRef: result.file_ref,
+        soniType,
+      };
+      navigate("../refine", { state });
+    }
+
   const filterCount = [tessChecked, keplerChecked, k2Checked].filter(
     Boolean,
   ).length;
@@ -337,9 +347,12 @@ export default function Lightcurves() {
       </VisuallyHidden>
       <Heading as="h1">Light Curves</Heading>
       <br />
-      <Text textStyle="lg">
-        Search for a specific star or choose from the suggestions below
-      </Text>
+      <HStack gap={0}>
+        <Text>
+          Search for a star, pick a suggestion, or
+        </Text>
+        <DataImport soniType={soniType} onImportSuccess={handleImportSuccess} onImportError={setErrorMessage}/>
+      </HStack>
       <br />
       <br />
       <form onSubmit={handleSubmit}>
@@ -463,7 +476,6 @@ export default function Lightcurves() {
           onCancel={cancelSearch}
         />
       )}
-      <br />
       <PlotDialog
         open={plotOpen}
         setOpen={setPlotOpen}
@@ -472,119 +484,121 @@ export default function Lightcurves() {
         image={image}
       />
       {!searched && (
-        <Box animation="fade-in 300ms ease-out">
-          <Tabs.Root variant="outline" defaultValue="exoplanet">
-            <HStack gap={5}>
-              <Heading size="2xl" as="h2">
-                Suggested
-              </Heading>
+        <>
+          <br />
+          <Box animation="fade-in 300ms ease-out">
+            <Tabs.Root variant="outline" defaultValue="exoplanet">
+              <HStack gap={5}>
+                <Heading size="2xl" as="h2">
+                  Suggested
+                </Heading>
 
-              <Tabs.List>
-                {Object.keys(categoryNames).map((category) => (
-                  <Tabs.Trigger
-                    value={category}
-                    key={category}
-                    fontWeight="bold"
-                    _hover={{ color: "fg" }}
-                    transition="0.15s ease"
+                <Tabs.List>
+                  {Object.keys(categoryNames).map((category) => (
+                    <Tabs.Trigger
+                      value={category}
+                      key={category}
+                      fontWeight="bold"
+                      _hover={{ color: "fg" }}
+                      transition="0.15s ease"
+                    >
+                      {categoryNames[category]}
+                    </Tabs.Trigger>
+                  ))}
+                </Tabs.List>
+              </HStack>
+              {Object.keys(categoryNames).map((category) => (
+                <Tabs.Content value={category} key={category}>
+                  <Stack
+                    gap="4"
+                    direction="row"
+                    wrap="wrap"
+                    justify={{ base: "center", md: "flex-start" }}
                   >
-                    {categoryNames[category]}
-                  </Tabs.Trigger>
-                ))}
-              </Tabs.List>
-            </HStack>
-            {Object.keys(categoryNames).map((category) => (
-              <Tabs.Content value={category} key={category}>
-                <Stack
-                  gap="4"
-                  direction="row"
-                  wrap="wrap"
-                  justify={{ base: "center", md: "flex-start" }}
-                >
-                  {suggested.map(
-                    (star) =>
-                      star.category === category && (
-                        <Card.Root
-                          width="200px"
-                          key={star.name}
-                          variant="elevated"
-                          _hover={{ transform: "scale(1.05)" }}
-                          transition="transform 0.2s ease"
-                          cursor="pointer"
-                          onClick={() => handleClickSuggested(star)}
-                        >
-                          <Box
-                            position="relative"
-                            bg="black"
-                            borderRadius="8px"
+                    {suggested.map(
+                      (star) =>
+                        star.category === category && (
+                          <Card.Root
+                            width="200px"
+                            key={star.name}
+                            variant="elevated"
+                            _hover={{ transform: "scale(1.05)" }}
+                            transition="transform 0.2s ease"
+                            cursor="pointer"
+                            onClick={() => handleClickSuggested(star)}
                           >
-                            <img
-                              src={getImage(category, ".svg")}
-                              alt={`${star.name} star`}
-                              style={{
-                                width: "100%",
-                                borderRadius: "8px",
-                                display: "block",
-                                animation: `twinkle ${randomRange(2, 3)}s infinite alternate`,
-                              }}
-                            />
-
                             <Box
-                              position="absolute"
-                              top="0.5rem"
-                              left="0.5rem"
-                              zIndex={10}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleClickPlot(star);
-                              }}
+                              position="relative"
+                              bg="black"
+                              borderRadius="8px"
+                            >
+                              <img
+                                src={getImage(category, ".svg")}
+                                alt={`${star.name} star`}
+                                style={{
+                                  width: "100%",
+                                  borderRadius: "8px",
+                                  display: "block",
+                                  animation: `twinkle ${randomRange(2, 3)}s infinite alternate`,
+                                }}
+                              />
+
+                              <Box
+                                position="absolute"
+                                top="0.5rem"
+                                left="0.5rem"
+                                zIndex={10}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleClickPlot(star);
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter" || e.key === " ") {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleClickPlot(star);
+                                  }
+                                }}
+                              >
+                                <Tooltip content="View plot">
+                                  <Button
+                                    size="xs"
+                                    tabIndex={0}
+                                    aria-label={`View plot for ${star.name}`}
+                                  >
+                                    <LuChartSpline />
+                                  </Button>
+                                </Tooltip>
+                              </Box>
+                            </Box>
+
+                            <Card.Body
+                              tabIndex={0}
+                              role="button"
+                              aria-label={`Sonify ${star.name}: ${star.description}`}
                               onKeyDown={(e) => {
                                 if (e.key === "Enter" || e.key === " ") {
                                   e.preventDefault();
-                                  e.stopPropagation();
-                                  handleClickPlot(star);
+                                  handleClickSuggested(star);
                                 }
                               }}
+                              mb="2"
                             >
-                              <Tooltip content="View plot">
-                                <Button
-                                
-                                  size="xs"
-                                  tabIndex={0}
-                                  aria-label={`View plot for ${star.name}`}
-                                >
-                                  <LuChartSpline />
-                                </Button>
-                              </Tooltip>
-                            </Box>
-                          </Box>
-
-                          <Card.Body
-                            tabIndex={0}
-                            role="button"
-                            aria-label={`Sonify ${star.name}: ${star.description}`}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter" || e.key === " ") {
-                                e.preventDefault();
-                                handleClickSuggested(star);
-                              }
-                            }}
-                            mb="2"
-                          >
-                            <Card.Title mb="2">{star.name}</Card.Title>
-                            <Card.Description>
-                              {star.description}
-                            </Card.Description>
-                          </Card.Body>
-                        </Card.Root>
-                      ),
-                  )}
-                </Stack>
-              </Tabs.Content>
-            ))}
-          </Tabs.Root>
-          <br />
-        </Box>
+                              <Card.Title mb="2">{star.name}</Card.Title>
+                              <Card.Description>
+                                {star.description}
+                              </Card.Description>
+                            </Card.Body>
+                          </Card.Root>
+                        ),
+                    )}
+                  </Stack>
+                </Tabs.Content>
+              ))}
+            </Tabs.Root>
+            <br />
+          </Box>
+        </>
       )}
       {resultsReady && (
         <>

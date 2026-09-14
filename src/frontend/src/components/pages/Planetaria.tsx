@@ -62,7 +62,7 @@ export default function Planetaria() {
       <Heading as="h1">Planetaria</Heading>
       <br />
       <HStack flexWrap="nowrap">
-        <Text textStyle="lg" flexShrink={1}>
+        <Text>
           Select a data source to sonify
         </Text>
       </HStack>

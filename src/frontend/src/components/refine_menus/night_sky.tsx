@@ -19,6 +19,7 @@ import { LuArrowRight } from "react-icons/lu";
 export default function NightSky({
   dataRef,
   dataName,
+  importedMaxMag,
   onApply,
 }: RefineMenuProps) {
   const [imageSrc, setImageSrc] = useState<string | null>(null);
@@ -26,7 +27,8 @@ export default function NightSky({
   const [fileRef, setFileRef] = useState(dataRef);
 
   // magnitude state
-  const [magnitude, setMagnitude] = useState("4.5");
+  const [magnitude, setMagnitude] = useState(importedMaxMag ? String(importedMaxMag) : "4.5");
+  const maxMagnitude = importedMaxMag ? importedMaxMag : 6
 
   const [applyLoading, setApplyLoading] = useState(false);
 
@@ -96,7 +98,7 @@ export default function NightSky({
             <Field.Label>Magnitude less than</Field.Label>
             <NumberInput.Root
               min={0}
-              max={6}
+              max={maxMagnitude}
               value={magnitude}
               onValueChange={(e) => {
                 setMagnitude(e.value);

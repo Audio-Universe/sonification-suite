@@ -356,9 +356,13 @@ async def get_plotting_data(request: ConstellationRequest):
 async def plot_constellation(request: ConstellationRequest):
     
     try:
-
-        # select constellation or asterism
-        stars_sorted = get_constellation(request.name, stick_figure=request.stick_figure)
+        # Get star data from either file_ref (if using imported data) or pattern name (if using a dataset from the Suite)
+        if request.file_ref:
+            imported_data_path = str(resolve_file(request.file_ref))
+            stars = pd.read_csv(imported_data_path)
+            stars_sorted = stars.sort_values('magnitude')
+        else:
+            stars_sorted = get_constellation(request.name, stick_figure=request.stick_figure)
 
         # choose top N stars if not filtering by shape
         N = request.n_stars
@@ -433,39 +437,50 @@ def constellation_center(df: pd.DataFrame):
 @router.post("/save-refined/")
 async def save_refined(request: ConstellationRequest):
 
-    # get and sort constellation/asterism stars
+    # Get constellation/asterism stars
     if request.file_ref:
         imported_data_path = str(resolve_file(request.file_ref))
         stars = pd.read_csv(imported_data_path)
-    else:   
+    else:
         stars = get_constellation(request.name, request.stick_figure)
-        
-    refined_stars = stars.head(request.n_stars).copy() if not request.stick_figure else stars
+
+    # Limit stars for constellation boundaries
+    refined_stars = (
+        stars if request.stick_figure
+        else stars.head(request.n_stars).copy()
+    )
 
     if request.stick_figure:
         if request.order:
-            # Add the custom order column
-            order_map = {hip: i for i, hip in enumerate(request.order, start=1)}
+            # Add custom order column
+            order_map = {
+                hip: i for i, hip in enumerate(request.order, start=1)
+            }
             refined_stars["custom_order"] = refined_stars["hip"].map(order_map)
         else:
-            refined_stars = stars
-    else:
-        # Constellation boundary
-        refined_stars = stars.head(request.n_stars).copy()
+            # remove any existing custom order column (in the case of an imported dataset)
+            refined_stars = refined_stars.drop(
+                columns=["custom_order"],
+                errors="ignore",
+            )
 
-    # compute 'center' of constellation for optional 'Place on Dome' feature
+    # Compute 'center' of constellation for optional 'Place on Dome' feature
     ra, dec = constellation_center(refined_stars)
-    
-    # add 'stick_figure' boolean flag to know which refine options to give in the case the data is re-uploaded by user
-    # also used to determine which plot to show on the final Sonify page
+
+    # Add flag so the dataset can be identified when re-uploaded
+    # and to determine which plot to show on the final Sonify page
     refined_stars["stick_figure"] = request.stick_figure
 
-    # save to tmp directory (overwriting any existing dataset to save disk space)
+    # Save to tmp directory (overwriting any existing dataset to save disk space)
     session_id = session_id_var.get()
-    filename = f'{SONI_TYPE}.csv'
+    filename = f"{SONI_TYPE}.csv"
     filepath = TMP_DIR / session_id / filename
     refined_stars.to_csv(filepath, index=False)
 
-    file_ref = f'session:{filename}'
+    file_ref = f"session:{filename}"
 
-    return {'file_ref': file_ref, 'ra': ra, 'dec': dec}
+    return {
+        "file_ref": file_ref,
+        "ra": ra,
+        "dec": dec,
+    }

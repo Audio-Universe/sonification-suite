@@ -1,4 +1,5 @@
 import { Layer } from "./layers";
+import { ConstellationType } from "./refine_menu";
 
 export interface NavigationState {
     soniType?: string;
@@ -14,6 +15,9 @@ export interface NavigationState {
     layers?: Layer[];
     layerID?: string;
     idColumn?: string | null;
-    constellationType?: 'constellation' | 'asterism' | 'importedStickFigure' | 'importedBoundaries'
+    constellationType?: ConstellationType;
+    importedNStars?: number | null;
+    importedOrder?: number[] | null;
+    importedMaxMag?: number | null;
     nStars?: number;
   }
