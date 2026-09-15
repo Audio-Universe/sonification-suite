@@ -71,7 +71,7 @@ export default function CustomStyleMenu({
   }
 
   const defaultSound: BaseSound = {
-    name: "Default Synth 🎹",
+    name: "Default Synth",
     composable: true,
     data_modes: ["discrete", "continuous"],
   };
