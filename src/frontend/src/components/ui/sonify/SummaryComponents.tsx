@@ -20,6 +20,7 @@ import AudioDownloadButton from "../AudioDownloadButton";
 
 export interface LayerSummary {
   layerLabel?: string;
+  layerID?: string;
   description: string;
   dataName: string;
   styleName: string;
@@ -31,7 +32,8 @@ export interface LayerSummary {
 interface LayerContentProps {
   summary: LayerSummary;
   altAz: string[] | null;
-  handleEditStyle: (fileRef: string) => void;
+  customOrder?: boolean;
+  handleEditStyle: (fileRef: string, layerID?: string) => void;
 }
 
 interface LayerDownloadsProps {
@@ -46,10 +48,11 @@ interface LayerDownloadsProps {
 interface SummaryListProps {
   summaries: LayerSummary[];
   altAz: string[] | null;
-  handleEditStyle: (fileRef: string) => void;
+  handleEditStyle: (fileRef: string, layerID?: string) => void;
   soniReady: boolean;
   audioKey: string | number;
   audioSystem: string;
+  customOrder: boolean;
 }
 
 const DownloadButton = ({
@@ -163,12 +166,13 @@ export const LayerDownloads = ({
 export const LayerContent = ({
   summary,
   altAz,
+  customOrder,
   handleEditStyle,
 }: LayerContentProps) => (
   <VStack w="100%" align="stretch" gap={5}>
     {summary.description.length > 0 && (
       <Text fontSize="sm" lineHeight="tall">
-        {summary.description}
+        {customOrder ? "Stars play in your chosen order" : summary.description}
       </Text>
     )}
     <HStack
@@ -196,7 +200,8 @@ export const LayerContent = ({
                 size="xs"
                 colorPalette="teal"
                 variant="subtle"
-                onClick={() => handleEditStyle(summary.styleRef!)}
+                onClick={() => {
+                  handleEditStyle(summary.styleRef!, summary.layerID)}}
               >
                 <LuSettings />
                 Edit
@@ -241,6 +246,7 @@ export const SummaryList = ({
   soniReady,
   audioKey,
   audioSystem,
+  customOrder
 }: SummaryListProps) => {
   return (
     <VStack w="100%" align="stretch" gap={4}>
@@ -305,6 +311,7 @@ export const SummaryList = ({
             <LayerContent
               summary={summary}
               altAz={altAz}
+              customOrder={customOrder}
               handleEditStyle={handleEditStyle}
             />
 

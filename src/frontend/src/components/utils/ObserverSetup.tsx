@@ -133,7 +133,6 @@ export default function ObserverSetup({
   };
 
   // Auto-detect location on mount
-
   useEffect(() => {
     if (!navigator.geolocation) return;
 
@@ -217,7 +216,7 @@ export default function ObserverSetup({
   }, [inputValue, GEO_NAMES_USER]);
 
   return (
-    <VStack gap={5} width="300px">
+    <VStack gap={3} width="300px">
       {/* Location */}
       <Field.Root>
         <Field.Label>Location Method</Field.Label>
@@ -255,7 +254,7 @@ export default function ObserverSetup({
             <Combobox.Control>
               <Combobox.Input placeholder="Enter a location..." />
               <Combobox.IndicatorGroup>
-                <Combobox.ClearTrigger />
+                <Combobox.ClearTrigger onClick={() => setAutoLocated(false)}/>
                 <Combobox.Trigger />
               </Combobox.IndicatorGroup>
             </Combobox.Control>

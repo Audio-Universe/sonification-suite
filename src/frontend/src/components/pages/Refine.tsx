@@ -46,7 +46,7 @@ export default function Refine() {
           importedMaxMag={importedMaxMag}
           idColumn={idColumn}
           onApply={(result: ApplyResult) => {
-            const { newRef, idColumn, newRa, newDec, nStars } = result;
+            const { newRef, idColumn, newRa, newDec, nStars, customOrder } = result;
 
             // Go back to Data Composer with new data ref if we came from there
             if (soniType === "data_composer") {
@@ -69,7 +69,8 @@ export default function Refine() {
               dataRef: newRef,
               ra: newRa ?? ra,
               dec: newDec ?? dec,
-              nStars: nStars
+              nStars,
+              customOrder
             };
             navigate("../style", { state });
           }}

@@ -212,6 +212,7 @@ export default function Constellations({
         newRa: result.ra,
         newDec: result.dec,
         nStars: filterType === "boundaries" ? Number(nStars) : undefined,
+        customOrder: customOrderOn
       });
     }
     setApplyLoading(false);

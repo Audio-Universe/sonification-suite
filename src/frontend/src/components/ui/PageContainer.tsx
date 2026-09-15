@@ -16,7 +16,7 @@ import { CircleQuestionMark, Info, Menu } from "lucide-react";
 import { useState } from "react";
 import { NavDrawer } from "./NavDrawer";
 import Breadcrumbs from "./Breadcrumbs";
-import { LuChevronRight } from "react-icons/lu";
+import { LuChevronRight, LuLightbulb } from "react-icons/lu";
 
 export default function PageContainer({
   children,
@@ -98,7 +98,7 @@ export default function PageContainer({
             </Flex>
             <Flex gap={5}>
               <Link
-                href="https://www.audiouniverse.org/sonification-suite/planetaria/about"
+                href="https://sonification-suite.readthedocs.io/en/latest/about/about/"
                 style={{ textDecoration: "none" }}
                 target="_blank"
                 rel="noopener noreferrer"
@@ -118,7 +118,7 @@ export default function PageContainer({
                 </HStack>
               </Link>
               <Link
-                href="https://www.audiouniverse.org/sonification-suite/planetaria"
+                href="https://sonification-suite.readthedocs.io/en/latest/"
                 style={{ textDecoration: "none" }}
                 target="_blank"
                 rel="noopener noreferrer"
@@ -135,6 +135,26 @@ export default function PageContainer({
                     <CircleQuestionMark />
                   </Icon>
                   <Text fontSize="md">Help</Text>
+                </HStack>
+              </Link>
+              <Link
+                href="https://www.audiouniverse.org/sonification-suite/suggestions-and-example-bank"
+                style={{ textDecoration: "none" }}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Go to Audio Universe examples page in new tab"
+              >
+                <HStack
+                  opacity={0.5}
+                  _hover={{ opacity: 1 }}
+                  transition="opacity 0.15s ease"
+                  cursor="pointer"
+                  role="button"
+                >
+                  <Icon size="md">
+                    <LuLightbulb />
+                  </Icon>
+                  <Text fontSize="md">Examples</Text>
                 </HStack>
               </Link>
             </Flex>

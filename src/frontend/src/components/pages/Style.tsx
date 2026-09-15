@@ -9,6 +9,7 @@ import { apiRequest } from "../../utils/requests";
 import { Box, Heading, Stack, Text, Dialog, Portal, Button, CloseButton } from "@chakra-ui/react";
 import { useComposer, useOptionalComposer } from "../../context/ComposerContext";
 import { NavigationState } from "../../types/navigation";
+import { LocateIcon } from "lucide-react";
 
 export default function Style() {
   const navigate = useNavigate();
@@ -24,6 +25,7 @@ export default function Style() {
   const layerID = location.state.layerID ?? null;
   const editStyle = location.state.editStyle ?? null;
   const nStars = location.state.nStars ?? 0;
+  const customOrder = location.state.customOrder ?? false;
 
   // Custom style menu open/close
   const [customOpen, setCustomOpen] = useState(false);
@@ -112,6 +114,7 @@ export default function Style() {
       soniType,
       ra,
       dec,
+      customOrder
     };
     navigate("../sonify", { state });
   }

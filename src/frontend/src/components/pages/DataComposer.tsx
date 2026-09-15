@@ -47,6 +47,7 @@ import {
   LuCircleHelp,
   LuSettings2,
   LuSettings,
+  LuPencil,
 } from "react-icons/lu";
 import ErrorMsg from "../ui/ErrorMsg";
 import HelperDialog from "../ui/data_composer/HelperDialog";
@@ -75,7 +76,7 @@ function makeEmptyLayer(index: number): Layer {
     missingColumns: [],
     nonNumericColumns: [],
     insufficientColumns: null,
-    volume: 1
+    volume: 1,
   };
 }
 
@@ -340,7 +341,7 @@ export default function DataComposer() {
   };
 
   const handleContinueToSonify = () => {
-    const state: NavigationState = { ...location.state, layers, soniType }
+    const state: NavigationState = { ...location.state, layers, soniType };
     navigate("sonify", { state });
   };
 
@@ -354,9 +355,7 @@ export default function DataComposer() {
       <Heading as="h1">Data Composer</Heading>
       <br />
       <Stack direction={{ base: "column", md: "row" }} gap="4">
-        <Text>
-          Build a layered sonification from your own data
-        </Text>
+        <Text>Build a layered sonification from your own data</Text>
         <Link
           onClick={() => setHowItWorksOpen(true)}
           color="teal.500"
@@ -429,6 +428,17 @@ export default function DataComposer() {
                             fontWeight="semibold"
                           />
                           <Editable.Control>
+                            <Tooltip content="Rename layer">
+                              <Editable.EditTrigger asChild>
+                                <IconButton
+                                  variant="ghost"
+                                  size="xs"
+                                  aria-label="Rename layer"
+                                >
+                                  <LuPencil />
+                                </IconButton>
+                              </Editable.EditTrigger>
+                            </Tooltip>
                             <Editable.CancelTrigger asChild>
                               <IconButton variant="outline" size="xs">
                                 <LuX />

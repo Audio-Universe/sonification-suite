@@ -15,6 +15,7 @@ export interface NavigationState {
     layers?: Layer[];
     layerID?: string;
     idColumn?: string | null;
+    customOrder?: boolean;
     constellationType?: ConstellationType;
     importedNStars?: number | null;
     importedOrder?: number[] | null;

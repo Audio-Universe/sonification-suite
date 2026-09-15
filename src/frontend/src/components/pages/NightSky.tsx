@@ -2,12 +2,13 @@ import { useNavigate } from "react-router-dom";
 import PageContainer from "../ui/PageContainer";
 import { nightSkyAPI } from "../../apiConfig";
 import { apiRequest } from "../../utils/requests";
-import { Box, Heading, HStack, Text, useStatStyles } from "@chakra-ui/react";
+import { Box, Card, Heading, HStack, Link, Text, VStack, Alert } from "@chakra-ui/react";
 import ObserverSetup, { ObserverValues } from "../utils/ObserverSetup";
 import { NavigationState } from "../../types/navigation";
 import { DataImport, ImportResult } from "../utils/DataImport";
 import { useState } from "react";
 import ErrorMsg from "../ui/ErrorMsg";
+import { LuFilm } from "react-icons/lu";
 
 export default function NightSky() {
   const soniType = "night_sky";
@@ -64,15 +65,37 @@ export default function NightSky() {
         />
       </HStack>
       <br />
+      <Alert.Root
+        colorPalette="teal"
+        size="sm"
+        width="fit-content"
+        mb={6}
+        mx="auto"
+        animation="fade-in 300ms ease-out"
+      >
+        <Alert.Indicator>
+          <LuFilm />
+        </Alert.Indicator>
+        <Alert.Content color="fg">
+          <Alert.Title>
+            <Link
+              href="https://colab.research.google.com/github/Audio-Universe/sonified-night-sky/blob/main/StarsAppearingColab.ipynb"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Create a complementary animation for your dome in Google Colab →
+            </Link>
+          </Alert.Title>
+        </Alert.Content>
+      </Alert.Root>
       {importErrorMessage && (
-        <Box width="fit-content" maxW="100%" mx="auto" mt={3}>
+        <Box width="fit-content" maxW="100%" mx="auto" mb={6}>
           <ErrorMsg
             message={importErrorMessage}
             onClose={() => setImportErrorMessage("")}
           />
         </Box>
       )}
-      <br />
       <Box display="flex" justifyContent="center">
         <ObserverSetup onSubmit={handleSubmit} />
       </Box>

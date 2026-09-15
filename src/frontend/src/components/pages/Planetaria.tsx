@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import PageContainer from "../ui/PageContainer";
-import { getImage } from "../../utils/assets";
-import { LuExternalLink, LuFilm, LuLayers3, LuStar } from "react-icons/lu";
+import { getImage, randomRange } from "../../utils/assets";
+import { LuExternalLink, LuFilm, LuLayers3, LuLightbulb, LuStar } from "react-icons/lu";
 
 import {
   Box,
@@ -50,7 +50,7 @@ const astroTypes: AstroType[] = [
     name: "Suggestions & Examples",
     description: "Pre-made examples and suggestions for using the Suite.",
     href: "https://www.audiouniverse.org/sonification-suite/suggestions-and-example-bank",
-    icon: LuFilm,
+    icon: LuLightbulb,
   },
 ];
 
@@ -117,6 +117,7 @@ export default function Planetaria() {
               >
                 {astroType.icon ? (
                   <Box
+                    bg="black"
                     height="200px"
                     width="100%"
                     display="flex"
@@ -124,7 +125,14 @@ export default function Planetaria() {
                     justifyContent="center"
                     borderRadius="8px"
                   >
-                    <Icon boxSize="64px" color="teal.500">
+                    <Icon
+                      boxSize="80px"
+                      color="white"
+                      strokeWidth={1}
+                      style={{
+                        animation: `twinkle ${randomRange(2, 3)}s infinite alternate`,
+                      }}
+                    >
                       <astroType.icon />
                     </Icon>
                   </Box>

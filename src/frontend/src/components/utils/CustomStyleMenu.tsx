@@ -1464,19 +1464,21 @@ export default function CustomStyleMenu({
             >
               Cancel
             </Button>
-            <Button
-              loading={loadingCustomPreview}
-              disabled={!hasTimeMapping}
-              width="30%"
-              colorPalette="teal"
-              variant="outline"
-              onClick={() => handlePreviewStyle()}
-            >
-              <HStack gap={3}>
-                <LuVolume2 />
-                Preview
-              </HStack>
-            </Button>
+            <Tooltip content='Preview these style settings using a sample dataset'>
+              <Button
+                loading={loadingCustomPreview}
+                disabled={!hasTimeMapping}
+                width="30%"
+                colorPalette="teal"
+                variant="outline"
+                onClick={() => handlePreviewStyle()}
+              >
+                <HStack gap={3}>
+                  <LuVolume2 />
+                  Preview
+                </HStack>
+              </Button>
+            </Tooltip>
             <Button
               disabled={!hasTimeMapping}
               width="30%"

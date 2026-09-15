@@ -4,6 +4,7 @@ export interface ApplyResult {
   newRa?: number;
   newDec?: number;
   nStars?: number;
+  customOrder?: boolean;
 }
 
 export interface RefineMenuProps {

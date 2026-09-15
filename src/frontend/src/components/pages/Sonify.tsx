@@ -60,13 +60,9 @@ import { formatCoord, formatSoniType } from "../../utils/formatting";
 import { Toaster, toaster } from "../ui/toaster";
 import VolumeMixer from "../ui/sonify/VolumeMixer";
 import { debounce } from "es-toolkit";
-import { useOptionalComposer } from "../../context/ComposerContext";
 
 export default function Sonify() {
   const navigate = useNavigate();
-  const composer = useOptionalComposer();
-
-  const MAX_DURATION = 60;
 
   // Route states
   const location = useLocation();
@@ -78,6 +74,7 @@ export default function Sonify() {
   const soniType = location.state.soniType;
   const ra = location.state.ra ?? null;
   const dec = location.state.dec ?? null;
+  const customOrder = location.state.customOrder ?? false;
 
   /*---------- States ----------*/
 
@@ -112,18 +109,21 @@ export default function Sonify() {
   const [daysPerSec, setDaysPerSec] = useState("");
   const [totalDays, setTotalDays] = useState<number>(0);
 
-  // Tracks audio files to prevent caching
-  const [audioKey, setAudioKey] = useState("");
-
   const [observerOpen, setObserverOpen] = useState(false);
   const [observerValues, setObserverValues] = useState<ObserverValues | null>(
     null,
   );
   const [altAz, setAltAz] = useState<string[] | null>(null);
 
+  // Tracks audio files to prevent caching
+  const [audioKey, setAudioKey] = useState("");
   const audioRef = useRef<HTMLAudioElement>(null);
 
   const [layers, setLayers] = useState<Layer[]>(location.state.layers ?? []);
+
+  // Allow sonifications up to 2 minutes for everything apart from multi-layered (3+ layers) sonifications
+  // This is to try and save disk space on server
+  const MAX_DURATION = layers.length > 2 ? 60 : 120;
 
   // Focus keyboard navigation onto audio player once sonification generated
   useEffect(() => {
@@ -195,21 +195,22 @@ export default function Sonify() {
 
     const url = `${coreAPI}/generate-sonification/`;
 
-    const soniLayers = soniType === 'data_composer'
-      ? // Send an array of data/style refs if using Data Composer
-        layers.map((l) => ({
-          data_ref: l.dataRef,
-          style_ref: l.styleRef,
-          id_column: l.idColumn,
-          volume: l.volume
-        }))
-      : [
-          // Otherwise, send just the one wrapped in an array
-          {
-            data_ref: dataRef,
-            style_ref: styleRef,
-          },
-        ];
+    const soniLayers =
+      soniType === "data_composer"
+        ? // Send an array of data/style refs if using Data Composer
+          layers.map((l) => ({
+            data_ref: l.dataRef,
+            style_ref: l.styleRef,
+            id_column: l.idColumn,
+            volume: l.volume,
+          }))
+        : [
+            // Otherwise, send just the one wrapped in an array
+            {
+              data_ref: dataRef,
+              style_ref: styleRef,
+            },
+          ];
 
     const data = {
       soni_type: soniType,
@@ -261,7 +262,7 @@ export default function Sonify() {
         setSoniReady(true);
 
         // Request spectrogram
-        getSpectrogram(fileRef)
+        getSpectrogram(fileRef);
       } else {
         console.error("No sonification file returned.");
       }
@@ -303,7 +304,7 @@ export default function Sonify() {
     setObserverOpen(false);
   };
 
-  const handleEditStyle = (styleRef: string) => {
+  const handleEditStyle = (styleRef: string, layerID?: string) => {
     const state: NavigationState = {
       ...location.state,
       dataRef,
@@ -312,6 +313,7 @@ export default function Sonify() {
       ra,
       dec,
       editStyle: styleRef,
+      ...(layerID && { layerID }),
     };
     navigate("../style", { state });
   };
@@ -322,7 +324,7 @@ export default function Sonify() {
     );
     setLayers(updatedLayers);
 
-    if (soniClicked){
+    if (soniClicked) {
       debouncedMix(updatedLayers);
       setSpecNeedsRefresh(true);
     }
@@ -391,26 +393,28 @@ export default function Sonify() {
   const invalidLength =
     Number(length) > MAX_DURATION || length === "0" || length.includes("-");
 
-  const summaries: LayerSummary[] = soniType === 'data_composer'
-    ? layers.map((l) => ({
-        layerLabel: l.label,
-        description: l.styleDescription!,
-        dataName: l.dataName!,
-        styleName: l.styleName!,
-        dataRef: l.dataRef,
-        styleRef: l.styleRef,
-        volume: l.volume,
-      }))
-    : [
-        {
-          description: styleDescription,
-          dataName: dataName,
-          styleName: styleName,
-          dataRef,
-          styleRef,
-          volume: 1,
-        },
-      ];
+  const summaries: LayerSummary[] =
+    soniType === "data_composer"
+      ? layers.map((l) => ({
+          layerLabel: l.label,
+          layerID: l.id,
+          description: l.styleDescription!,
+          dataName: l.dataName!,
+          styleName: l.styleName!,
+          dataRef: l.dataRef,
+          styleRef: l.styleRef,
+          volume: l.volume,
+        }))
+      : [
+          {
+            description: styleDescription,
+            dataName: dataName,
+            styleName: styleName,
+            dataRef,
+            styleRef,
+            volume: 1,
+          },
+        ];
 
   const COMPASS = Object.fromEntries(
     ORIENTATIONS.map(({ value, label }) => [value, label]),
@@ -495,7 +499,7 @@ export default function Sonify() {
                     </Field.HelperText>
                   )}
                   <Field.ErrorText>
-                    Please enter a number up to {MAX_DURATION} seconds.
+                    {`Maximum ${MAX_DURATION} seconds ${layers.length > 2 ? ' when using more than 2 layers' : ''}`}
                   </Field.ErrorText>
                 </Field.Root>
                 {soniType === "light_curves" && (
@@ -703,6 +707,7 @@ export default function Sonify() {
                 soniReady={soniReady}
                 audioKey={audioKey}
                 audioSystem={generatedAudioSystem}
+                customOrder={customOrder}
               />
             </VStack>
           </form>

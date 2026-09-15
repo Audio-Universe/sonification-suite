@@ -11,11 +11,11 @@ import {
   Badge,
 } from "@chakra-ui/react";
 import { useNavigate } from "react-router-dom";
-import { LuFilm, LuLayers3, LuTelescope } from "react-icons/lu";
+import { LuFilm, LuLayers3, LuLightbulb, LuTelescope } from "react-icons/lu";
 import { IconType } from "react-icons/lib";
 import PageContainer from "../ui/PageContainer";
 
-interface Domain {
+interface Module {
   id: string;
   label: string;
   description: string;
@@ -24,7 +24,7 @@ interface Domain {
   Icon: IconType;
 }
 
-const DOMAINS: Domain[] = [
+const MODULES: Module[] = [
   {
     id: "planetaria",
     label: "Planetaria & Astronomy",
@@ -47,7 +47,7 @@ const DOMAINS: Domain[] = [
       "Explore pre-made examples, tutorials, and suggestions for using the Suite.",
     href: "https://www.audiouniverse.org/sonification-suite/suggestions-and-example-bank",
     external: true,
-    Icon: LuFilm
+    Icon: LuLightbulb
   },
 ];
 
@@ -82,16 +82,16 @@ function WaveformDecoration() {
   );
 }
 
-function DomainCard({ domain }: { domain: Domain }) {
+function ModuleCard({ module }: { module: Module }) {
   const navigate = useNavigate();
 
   const handleOpen = () => {
-    if (!domain.href) return;
+    if (!module.href) return;
 
-    if (domain.external) {
-      window.open(domain.href, "_blank", "noopener,noreferrer");
+    if (module.external) {
+      window.open(module.href, "_blank", "noopener,noreferrer");
     } else {
-      navigate(domain.href);
+      navigate(module.href);
     }
   };
 
@@ -104,21 +104,21 @@ function DomainCard({ domain }: { domain: Domain }) {
       onClick={handleOpen}
       tabIndex={0}
       role="button"
-      aria-label={`Open ${domain.label}`}
+      aria-label={`Open ${module.label}`}
       onKeyDown={(e) => {
-        if (domain.href && (e.key === "Enter" || e.key === " ")) {
+        if (module.href && (e.key === "Enter" || e.key === " ")) {
           e.preventDefault();
-          navigate(domain.href);
+          navigate(module.href);
         }
       }}
     >
       <Card.Body>
         <VStack align="flex-start" gap={3}>
           <HStack justify="space-between" w="100%">
-            <domain.Icon size="1.4rem" />
+            <module.Icon size="1.4rem" />
           </HStack>
-          <Card.Title>{domain.label}</Card.Title>
-          <Card.Description>{domain.description}</Card.Description>
+          <Card.Title>{module.label}</Card.Title>
+          <Card.Description>{module.description}</Card.Description>
         </VStack>
       </Card.Body>
     </Card.Root>
@@ -128,7 +128,6 @@ function DomainCard({ domain }: { domain: Domain }) {
 export default function Landing() {
   return (
     <PageContainer nav={false}>
-      {/* Hero */}
       <Flex
         as="header"
         direction="column"
@@ -157,12 +156,12 @@ export default function Landing() {
         <WaveformDecoration />
 
         <Text fontSize="lg" maxW="540px" opacity={0.7}>
-          An accessible platform for transforming datasets into
-          tangible audio representations.Choose a module below to begin.
+          An accessible platform for transforming datasets into tangible audio
+          representations. Choose a module below to begin.
         </Text>
       </Flex>
 
-      {/* Domain cards */}
+      {/* Module cards */}
       <Box>
         <HStack gap={4} mb={5} align="center">
           <Heading as="h2" size="lg" fontWeight="400">
@@ -172,8 +171,8 @@ export default function Landing() {
         </HStack>
 
         <Grid templateColumns={{ base: "1fr", md: "repeat(3, 1fr)" }} gap={4}>
-          {DOMAINS.map((domain) => (
-            <DomainCard key={domain.id} domain={domain} />
+          {MODULES.map((module) => (
+            <ModuleCard key={module.id} module={module} />
           ))}
         </Grid>
       </Box>
