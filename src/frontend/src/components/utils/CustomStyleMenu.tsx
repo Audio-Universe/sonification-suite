@@ -1464,7 +1464,7 @@ export default function CustomStyleMenu({
             >
               Cancel
             </Button>
-            <Tooltip content='Preview these style settings using a sample dataset'>
+            <Tooltip content='Preview these style settings using a sample dataset' disabled={!hasTimeMapping}>
               <Button
                 loading={loadingCustomPreview}
                 disabled={!hasTimeMapping}

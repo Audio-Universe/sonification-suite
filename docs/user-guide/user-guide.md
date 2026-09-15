@@ -23,7 +23,7 @@ The Suite generally follows a 4-step process, each of which is given in more det
 
 ## Step 1: Data :test_tube:
 
-Select the data source you wish to sonify.
+Select the data source you wish to sonify. You can also [import a dataset]() you previously downloaded from the Suite.
 
 ### Light Curves
 
@@ -45,7 +45,7 @@ Use the search bar (or click the arrow to see a drop-down menu) to find the cons
 
 These data contain information about all of the stars (above a magnitude limit) which are visible to an observer for a chosen location and time. These star data include magnitudes, colours, altitude and azimuth.
 
-Click 'allow' on the browser location pop-up to allow the Suite to auto-detect your location, or enter your location manually using a place name or lat/long coordinates (the location search is quite granular, so don't be afraid to try smaller/more rural locations).
+Click ***allow*** on the browser location pop-up to allow the Suite to auto-detect your location, or enter your location manually using a place name or lat/long coordinates (the location search is quite granular, so don't be afraid to try smaller/more rural locations).
 
 Select the orientation of your dome which is at the front (with respect to your speaker system). In other words, if the audience got a compass out, which direction would they be facing?
 
@@ -117,7 +117,7 @@ Click ***+ Options*** under each mapping to control the parameters further:
 
 !!! warning "Parameter mapping restrictions"
 
-    - Some Input property must be mapped to the Output of time. For example, the time of a light curve is most likely to be mapped to the time of the sonification (so you hear the light curve over time). For constellations, you might map the star's magnitude to time (so the brightest stars are heard first) or Right Ascension (so the stars are heard in order of RA). 
+    - Some ***Input*** property must be mapped to the ***Output*** of time. For example, the time of a light curve is most likely to be mapped to the time of the sonification (so you hear the light curve over time). For constellations, you might map the star's magnitude to time (so the brightest stars are heard first) or Right Ascension (so the stars are heard in order of RA). 
 
     - You can only have one parameter mapping per ***Output*** type, i.e., only one data property can control any one of the sound properties.
 
@@ -130,7 +130,7 @@ Choose from either ***Continuous*** or ***Discrete***. The mode you choose will 
 !!! info inline end "Pitch mapping"
     If using ***Continuous***, mapping something to **Pitch** means that the pitch will bend up and down as the data increases and decreases. If this is desired, it is recommended you use either **Power Hum**, **Tri Synth** or **Default Synth** as the base sound (and use a single note in the **Notes** input, if using one of the synths).
 
-- ***Continuous***: The data will be heard as a constant stream of sound which evolves over time. You can think of this as the sonic equivalent of a line graph. 
+- ***Continuous***: The data will be heard as a constant stream of sound which evolves over time. You can think of this as the sonic equivalent of a line graph. Note that for Constellations or Night Sky, Continuous is disabled. This is because each data point represents a star, rather than a value that changes continuously between points.
 
 - ***Discrete***: The data points are heard as individual events in time. This can be thought of as the sonic equivalent of a scatter graph. The recommended base sounds to use with discrete sonifications are **Harp**, **Glockenspiel**, or **Mallets**.
 
@@ -147,5 +147,64 @@ Select the underlying sound/instrument that is used as a basis for the sonificat
 
 If your chosen base sound is composable ( :musical_keyboard: ), options for **Root Note**, **Harmony**, **Notes**, and **Octave Range** will appear.
 
+- ***Root Note***: The note which the chord or scale is built from. Really, this is an arbitrary choice, unless you want the sonification to fit in a certain key to overlay some music etc.
+- ***Harmony***: The chord to build from the root note. If using ***Discrete*** Data Mode, you will also have a choice of scales to use. Click the dice icon to the right to pick a random root note and harmony combination.
+- ***Notes***: The set of musical notes that the sonification will ultimately use. This note set is re-generated any time you change the root note, harmony, or octave range. You can double-click on notes to edit them, click the x to delete them, or type in new notes next to them. This accepts any note (sharps and flats included) from the range C1 to B6.
+- ***Octave Range***: How many octaves you want your note set to span. In other words, how low should the lowest note be, and how high should the highest be.
+
+!!! question "How are the notes actually played?"
+    In ***Continuous*** Data Mode, the notes are all played at once (as a chord) and held for the duration of the sonification. This is why you'll only see scales in the harmony options when using ***Discrete*** Data Mode - because playing all of the notes in a scale simultaneously might not sound very good (holding the notes of a Chromatic scale all at once is the equivalent of pressing every key on a piano at the same time!). This is also why you should use caution when using the ***Pitch*** output in ***Continuous*** mode - as using multiple notes means the whole chord will bend up and down in pitch.
+
+    In ***Discrete*** Data Mode, only individual notes are played at a time. To hear different notes, you'll need to map something to the ***Pitch*** output.
+
+#### Previewing your Custom Style
+Click the ***Preview*** button at the bottom of the menu to hear a 5-second preview of your style settings. Note that this does not use your chosen dataset, but instead uses a [sine wave](https://en.wikipedia.org/wiki/Sine_wave) as the input data. This means that you can hear your parameter mappings go up and down smoothly through their full range, using your chosen ***Base Sound*** and ***Notes***.
+
+#### Importing Custom Styles
+On the final Sonify page, you have the option to download your Style file (in the Downloads section of the summary). You can then reuse this Style again by clicking ***Import*** at the top of the Custom Style Menu and uploading it.
+
+<small>
+  :octicons-alert-16:
+  **Note:** You can only import a custom Style when using the same data type that it was created for. In other words, a Style created for a light curve can only be used for light curves, etc. This is because a Style file contains the ***Inputs*** which are specific to that data type.
+</small>
 
 ## Step 4: Sonify :loud_sound:
+The final step of the workflow. This is where you add final settings, generate the sonification, and save any outputs.
+
+- ***Duration***: How long in seconds do you want the sonification to last? The data will be spread across this timeframe before generation, so the audio will not distort by stretching it. The maximum duration is 2 minutes (or 1 minute if you are using several layers in the Data Composer). For light curves, you also have the option to choose how many days in the data you want to pass per second. This will automatically calculate a new total duration for you.
+
+- ***Audio System***: Choose your planetarium's audio system from Mono, Stereo, 5.1, or 7.1. This will determine how many channels the generated audio file will have.
+
+<small>
+  :octicons-light-bulb-16:
+  Changing ***Duration*** or ***Audio System*** will require you to re-generate the sonification for the new settings to take effect.
+</small>
+
+Click ***Generate Sonification*** to create your audio file. For longer sonifications (or those that use lots of stars/data points), this may take some time. Once ready, the audio player will pop up at the bottom of the screen.
+
+Click the ***Download*** button to save your sonification as either WAV or MP3. Sonifications generated for 5.1 or 7.1 audio are only available for download as WAV files.
+
+#### Summary
+In the ***Summary*** section you will find the style description (if using a preset style), the data name and the style name. In the ***Downloads*** section, you can save the dataset and Style file for later use. This may be handy if you have spent some time refining a dataset, or fine tuning a custom Style, and would like to import either of those back into the Suite for a future sonification.
+
+#### Mapping Table
+You can also download the ***Mapping Table*** for your sonification. This is a CSV file which shows the exact timing and sound parameters for each data point. For sonifications created using ***Continuous*** data mode (such as many of the preset light curve Styles), the table will show the evolving properties regularly sampled in time.
+
+For Constellations and Night Skies, the Mapping Table will also identify each data point (star) with its Hipparcos ID and display name(1). 
+{ .annotate }
+
+1. The star's display name is taken from the first available identifier in the following order of preference: **Proper name → Flamsteed designation → Bayer designation → HIP ID (Hipparcos ID) → HD ID (Henry Draper Catalogue ID)**.
+
+By showing when each star is heard in the sonification, the Mapping Table can help you synchronise the audio with a visual sequence in your planetarium software.
+
+#### Spectrogram
+After generating your sonification, a spectrogram will be available to view. Click the switch above the data plot to view it.
+
+??? question "What is a Spectrogram?"
+    A spectrogram is a visual picture of sound. It shows three things at the same time on one graph: how **frequency** (pitch) and **loudness** (amplitude) change as **time** goes by.
+
+    How to Read a Spectrogram:
+
+    - Horizontal Axis (X-axis): shows time moving from left to right.
+    - Vertical Axis (Y-axis): shows frequency or pitch, with low sounds at the bottom and high sounds at the top.
+    - Colours and Brightness: show the amplitude or loudness. Bright colours (like white and yellow) mean the sound is loud at that frequency, while dark or cool colours (like black/blue) mean it is quiet or absent.

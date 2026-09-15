@@ -391,6 +391,8 @@ def mix_layer_volumes(request: VolumeRequest):
         # return original master if volumes all reset to 1
         return {'file_ref': 'session:audio_figure.wav'}
     
+    is_single_layer = len(request.volumes) == 1
+    
     session_id = session_id_var.get()
     session_dir = TMP_DIR / session_id
     audio_figure_path = session_dir / 'audio_figure.wav'
@@ -406,11 +408,13 @@ def mix_layer_volumes(request: VolumeRequest):
             # Don't add silent layers
             continue
         
-        layer_path = session_dir / f"layer_{i}.wav"
+        layer_name = "audio_figure.wav" if is_single_layer else f"layer_{i}.wav"
+        layer_path = session_dir / layer_name
         layer_audio = AudioSegment.from_wav(layer_path)
         
         gain_db = 20 * math.log10(vol)
-        adjusted = layer_audio + gain_db -5.0 # Add 5db headroom to avoid clipping
+        headroom = 5.0 if not is_single_layer else 0.0
+        adjusted = layer_audio + gain_db -headroom # Add 5db headroom to avoid clipping
         
         master = master.overlay(adjusted)
 
