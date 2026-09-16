@@ -208,3 +208,15 @@ After generating your sonification, a spectrogram will be available to view. Cli
     - Horizontal Axis (X-axis): shows time moving from left to right.
     - Vertical Axis (Y-axis): shows frequency or pitch, with low sounds at the bottom and high sounds at the top.
     - Colours and Brightness: show the amplitude or loudness. Bright colours (like white and yellow) mean the sound is loud at that frequency, while dark or cool colours (like black/blue) mean it is quiet or absent.
+
+#### Place on Dome
+For light curves and constellations, the Sonify page includes a ***Place on Dome*** option. This allows you to position the sound within a planetarium dome according to where the chosen star or constellation would appear in the sky.
+
+Enter the location, date and time (using the local timezone for that location), and the direction you are facing. The feature uses these settings to calculate where the selected star or constellation would appear in the sky, and positions the audio so that it sounds as though it is coming from that direction on the dome.
+
+Note that your chosen star or constellation may be below the horizon for your selected location and time, and therefore may not be suitable for positioning in your dome. After generating your sonification, check the **Altitude** and **Azimuth** values in the summary. An altitude below **0°** means that the object is below the horizon, so the sound will be positioned as though it is coming from underneath you.
+
+<small>
+  :octicons-light-bulb-16:
+  The effect will be most noticeable for objects close to the horizon. Objects close to the **Zenith** (directly overhead) will sound as though they are coming from all speakers. This is because a sound source directly above you does not have a clear left or right direction.
+</small>

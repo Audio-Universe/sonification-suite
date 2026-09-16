@@ -252,7 +252,7 @@ export default function DataComposer({
             <HStack mb="2">
               <Text fontWeight="bold">Columns</Text>
               <InfoTip
-                content="Choose which columns to keep. If using a suggested style, columns will be mapped in the order they appear here."
+                content="Choose which columns to keep. If using a preset style, columns will be mapped in the order they appear here. You can reorder the columns by deselecting all of them, then selecting them in your chosen order."
                 positioning={{ placement: "right" }}
                 contentProps={{ maxW: "300px" }}
               />
