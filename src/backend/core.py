@@ -336,7 +336,8 @@ def get_audio(
     file_ref: str, 
     name: str, 
     audio_format: str = 'wav', 
-    volume: float = 1
+    volume: float = 1,
+    download: bool = False
     ):
     
     audio_format = audio_format.lower()
@@ -377,8 +378,9 @@ def get_audio(
         background_tasks.add_task(Path(mp3_path).unlink, missing_ok=True) # Delete temp mp3 after serving
         file_path = mp3_path
     
-    # Log download event in analytics
-    log_event(session_id=session_id_var.get(), ip=connection.client.host, event='audio_download')
+    # Log event in analytics if this is a download
+    if download:
+        log_event(session_id=session_id_var.get(), ip=connection.client.host, event='audio_download')
 
     return FileResponse(path=file_path, 
                         filename=f'{name}.{audio_format}',

@@ -24,17 +24,17 @@ import { Link } from "react-router-dom";
 
 export function NavDrawer() {
   const navItems = [
-    { icon: Home, label: "Home", to: "/planetaria", external: false },
+    { icon: Home, label: "Home", to: "/", external: false },
     {
       icon: Info,
       label: "About",
-      to: "https://www.audiouniverse.org/sonification-suite/planetaria/about",
+      to: "https://sonification-suite.readthedocs.io/en/latest/about/about/",
       external: true,
     },
     {
       icon: HelpCircle,
       label: "Help",
-      to: "https://www.audiouniverse.org/sonification-suite/planetaria",
+      to: "https://sonification-suite.readthedocs.io/en/latest/",
       external: true,
     },
   ];

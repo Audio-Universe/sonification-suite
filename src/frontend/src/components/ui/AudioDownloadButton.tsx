@@ -80,7 +80,7 @@ export default function AudioDownloadButton({
                     onClick={onDownload}
                   >
                     <a
-                      href={`${coreAPI}/audio/${audioFileRef}?name=${encodeURIComponent(fileName)}&audio_format=${format}&v=${encodeURIComponent(audioKey)}&volume=${volume}`}
+                      href={`${coreAPI}/audio/${audioFileRef}?name=${encodeURIComponent(fileName)}&audio_format=${format}&v=${encodeURIComponent(audioKey)}&volume=${volume}&download=true`}
                     >
                       Download {format.toUpperCase()}
                     </a>

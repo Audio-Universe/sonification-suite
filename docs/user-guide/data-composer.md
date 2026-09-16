@@ -27,8 +27,8 @@ The general workflow follows these steps (given in more detail below):
 ## Step 1: Data :test_tube:
 After clicking ***Add layer***, you will have the option to upload a file, or (if this is not your first layer), use the same dataset as another layer.
 
-Using the same dataset across all layers would allow you to hear different variables of the data, each with a different Style.
+Using the same dataset across all layers would allow you to hear different variables of the data, each with a different Style. If using the same dataset, you may want to make sure your chosen Style maps the same column to Time for every layer. This way, you will hear each data variable synchronised to a common time base.
 
-If using the same dataset, you may want to make sure your chosen Style maps the same column to Time for every layer. This way, you will hear each data variable synchronised to a common time base.
+> **Example:** You upload a CSV of a year's daily weather readings, with `date`, `temperature`, and `wind_speed` columns. On one layer, you create a Style that maps `temperature` to Pitch and `date` to Time. On another, you map `wind_speed` to Filter Cutoff and `date` to Time again. As both layers map the same column to Time, you'll hear the seasons unfold with temperature and wind changing together, in sync. Note that only numeric columns can be mapped - if your `date` column is in dd/mm/yyy format (or similar), you'll need to convert it to a numeric format first.
 
 Alternatively, you might want to use multiple different datasets to hear different data sources at the same time.

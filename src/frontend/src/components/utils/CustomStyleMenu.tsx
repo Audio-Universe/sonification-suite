@@ -10,6 +10,7 @@ import {
   LuDices,
   LuChartSpline,
   LuChartScatter,
+  LuFileUp,
 } from "react-icons/lu";
 import ErrorMsg from "../ui/ErrorMsg";
 
@@ -769,9 +770,9 @@ export default function CustomStyleMenu({
                       size="xs"
                       variant="subtle"
                       colorPalette="teal"
-                      aria-label="Upload style file"
+                      aria-label="Import style file"
                     >
-                      <LuUpload /> Upload
+                      <LuFileUp /> Import
                     </Button>
                   </FileUpload.Trigger>
                 </FileUpload.Root>

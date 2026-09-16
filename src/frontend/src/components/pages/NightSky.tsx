@@ -65,7 +65,7 @@ export default function NightSky() {
         />
       </HStack>
       <br />
-      <Alert.Root
+      {/* <Alert.Root
         colorPalette="teal"
         size="sm"
         width="fit-content"
@@ -87,7 +87,7 @@ export default function NightSky() {
             </Link>
           </Alert.Title>
         </Alert.Content>
-      </Alert.Root>
+      </Alert.Root> */}
       {importErrorMessage && (
         <Box width="fit-content" maxW="100%" mx="auto" mb={6}>
           <ErrorMsg
