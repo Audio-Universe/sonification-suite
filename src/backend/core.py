@@ -227,7 +227,7 @@ def generate_sonification(request: SonificationRequest, connection: Request):
             LOG.error("Error generating sonification:\n" + traceback.format_exc())
             raise HTTPException(
                 status_code=500,
-                detail=f"{type(e).__name__}: {str(e)}"
+                detail="Error generating sonification. If error persists, please try with different Style settings."
             )
     
     filename = 'audio_figure.wav'

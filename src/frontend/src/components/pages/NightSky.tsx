@@ -65,7 +65,7 @@ export default function NightSky() {
         />
       </HStack>
       <br />
-      {/* <Alert.Root
+      <Alert.Root
         colorPalette="teal"
         size="sm"
         width="fit-content"
@@ -83,11 +83,11 @@ export default function NightSky() {
               target="_blank"
               rel="noopener noreferrer"
             >
-              Create a complementary animation for your dome in Google Colab →
+              Try our Google Colab tool to create an audio-visual Night Sky →
             </Link>
           </Alert.Title>
         </Alert.Content>
-      </Alert.Root> */}
+      </Alert.Root>
       {importErrorMessage && (
         <Box width="fit-content" maxW="100%" mx="auto" mb={6}>
           <ErrorMsg

@@ -28,7 +28,7 @@ export function NavDrawer() {
     {
       icon: Info,
       label: "About",
-      to: "https://sonification-suite.readthedocs.io/en/latest/about/about/",
+      to: "https://sonification-suite.readthedocs.io/en/latest/about/",
       external: true,
     },
     {

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { LuFileUp, LuTelescope } from "react-icons/lu";
+import { LuFileUp, LuFilm, LuTelescope } from "react-icons/lu";
 import PageContainer from "../ui/PageContainer";
 import { getImage, randomRange } from "../../utils/assets";
 import { coreAPI, constellationsAPI } from "../../apiConfig";
@@ -227,6 +227,29 @@ export default function Constellations() {
           />
         </Box>
       )}
+      <Alert.Root
+              colorPalette="teal"
+              size="sm"
+              width="fit-content"
+              mb={2}
+              mx="auto"
+              animation="fade-in 300ms ease-out"
+            >
+              <Alert.Indicator>
+                <LuFilm />
+              </Alert.Indicator>
+              <Alert.Content color="fg">
+                <Alert.Title>
+                  <Link
+                    href="https://colab.research.google.com/github/Audio-Universe/sonified-night-sky/blob/main/StarsAppearingConstellationColab.ipynb"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Try our Google Colab tool to create an audio-visual Constellation →
+                  </Link>
+                </Alert.Title>
+              </Alert.Content>
+            </Alert.Root>
       <br />
       <Box animation="fade-in 300ms ease-out">
         <Heading size="2xl" as="h2">

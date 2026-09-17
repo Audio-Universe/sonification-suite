@@ -2,6 +2,10 @@
 
 These pages walk through the complete sonification workflow, from choosing data to generating final audio output.
 
+For guided tutorial videos, please visit the [Audio Universe page](https://www.audiouniverse.org/sonification-suite/suggestions-and-example-bank/tutorials).
+
+This User Guide covers concepts that are mostly relevant to the **Planetaria** module, but for help using the **Data Composer** module, you should visit [its own guide](../data-composer).
+
 ## Quick Start
 
 The Suite generally follows a 4-step process, each of which is given in more detail below: 
@@ -11,10 +15,6 @@ The Suite generally follows a 4-step process, each of which is given in more det
 3. Select a Style
 4. Generate your sonification
 
-<small>
-  **Note:** The only exception to this workflow is the Data Composer, details of which can be found [here](../data-composer).
-</small>
-
 !!! info "In-App Navigation"
 
     To go back to a previous step, click the corresponding step at the top of the page. For example, if you see **Planetaria > Constellations > Refine > Style** in the header, click on any of those to return to that step.
@@ -23,7 +23,9 @@ The Suite generally follows a 4-step process, each of which is given in more det
 
 ## Step 1: Data :test_tube:
 
-Select the data source you wish to sonify. You can also [import a dataset]() you previously downloaded from the Suite.
+Select the data source you wish to sonify. You can also [import a dataset](#importing-data) you previously downloaded from the Suite.
+
+For a detailed look at where our Astronomy data comes from, [check out our doc](../astronomy-data).
 
 ### Light Curves
 
@@ -50,6 +52,13 @@ Click ***allow*** on the browser location pop-up to allow the Suite to auto-dete
 Select the orientation of your dome which is at the front (with respect to your speaker system). In other words, if the audience got a compass out, which direction would they be facing?
 
 Enter the date and time for which you sonify the night sky (this is the same time zone as your chosen location).
+
+### Importing Data
+After sonifying, you have the option to download your dataset. This is so that you can ***Import*** the same dataset back into the Suite at a later date. This may be handy if you've spent some time refining the data, or carefully choosing a custom constellation order, for instance.
+
+To do this, look for the ***Import*** button at the top of the page for each data type (Light Curves, Night Sky, Constellations). It is important that you only import the relevant data type back from this page (e.g. only import a light curve on the Light Curve page, a constellation on the Constellation page, etc.).
+
+If importing a constellation on which you previously chose a custom order, the Suite will automatically remember the order, and pre-populate the interactive plot with it.
 
 ## Step 2: Refine :scissors:
 
@@ -107,7 +116,7 @@ Click on a preset style if you wish to use it and you will be taken straight to 
 #### Parameter Mappings
 
 - The ***Input*** is the data parameter (e.g., light curve time, absolute magnitude for stars etc.). In other words, the aspect of the data which you want to control the sound 
-- The ***Output*** is the sound parameter you want to change (e.g., time of the sonification, filter cut off, pitch, volume etc.). In other words, the aspect of the sound you want to be controlled by the ***Input***. [Click here]() for more details on what the output parameters do.
+- The ***Output*** is the sound parameter you want to change (e.g., time of the sonification, filter cut off, pitch, volume etc.). In other words, the aspect of the sound you want to be controlled by the ***Input***. [Click here](../mappings-reference) for more details on what the output parameters do.
 
 Click ***+ Options*** under each mapping to control the parameters further:
 
@@ -185,7 +194,9 @@ Click ***Generate Sonification*** to create your audio file. For longer sonifica
 Click the ***Download*** button to save your sonification as either WAV or MP3. Sonifications generated for 5.1 or 7.1 audio are only available for download as WAV files.
 
 #### Summary
-In the ***Summary*** section you will find the style description (if using a preset style), the data name and the style name. In the ***Downloads*** section, you can save the dataset and Style file for later use. This may be handy if you have spent some time refining a dataset, or fine tuning a custom Style, and would like to import either of those back into the Suite for a future sonification.
+In the ***Summary*** section you will find the style description (if using a preset style), the data name and the style name. If you used a custom Style, you will have the option to click ***Edit*** to go back to your Style settings and tweak anything that you like.
+
+In the ***Downloads*** section, you can save the dataset and Style file for later use. This may be handy if you have spent some time refining a dataset, or fine tuning a custom Style, and would like to import either of those back into the Suite for a future sonification.
 
 #### Mapping Table
 You can also download the ***Mapping Table*** for your sonification. This is a CSV file which shows the exact timing and sound parameters for each data point. For sonifications created using ***Continuous*** data mode (such as many of the preset light curve Styles), the table will show the evolving properties regularly sampled in time.

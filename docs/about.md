@@ -1,14 +1,24 @@
+# Background
+
+Audio Universe is a collection of tools and resources to support data analysis, educations, and communicators to represent data and concepts with sound. Our work is underpinned by our research, and multidisciplinary team of experts. The Audio Universe project website is located at [www.audiouniverse.org](www.audiouniverse.org)
+
+Here we present documentations for our Sonification Suite. This is an online application primarily designed to be a tool for communicators to make their own sounds to represent and phenomena. By “communicators” we mean anyone who wants to communicate something about a dataset, this could include: educators (in formal or informal settings), journalists, scientists wanting to share results to various audiences etc.
+
+There are many benefits to adding sound to your communications. For example:
+
+* communicating information which is challenging, or less interesting, to show visually;
+* to make the sound in educational shows or digital communicators more immersive in a meaningful way (i.e., using the data to inform the sound);
+* providing another mode of communication for those who need, or prefer, non-visual methods;
+* creating sensory experiences.
+
+We current have two Sonification Suite Domains:
+
+1. For Planetaria and Astronomy Communicators, we curated astronomical datasets accessible directly through the App, and a set of bespoke options tailored to this application.
+2. The Data Composer, which can be used for data from any domain in the form of a tabulated dataset.
+
+These pages provide a user guide and technical information. If you want to access suggested examples, pre-made examples, and good practise guidelines, please visit our website: [www.audiouniverse.org/sonification-suite](www.audiouniverse.org/sonification-suite).
+
 # Credits
-
-## Acknowledgement of Use
-
-If you use the Sonification Suite for any publicly available digital output (e.g., a recorded planetarium show or press release) you should provide a credit to the Audio Universe project. If you use any of the audio-visual outputs from the Sonification Suite, such as from the Examples Bank, unless otherwise stated, these are released under a [CC-BY 4.0 Licence](https://creativecommons.org/licenses/by/4.0/deed.en). 
-
-If you use the Sonification Suite for any publication, you must include a citation to the under-pinning STRAUSS code:
-
-Trayford et al., (2025). strauss: Sonification Tools and Resources for Analysis Using Sound Synthesis. Journal of Open Source Software, 10(109), 7875, [https://doi.org/10.21105/joss.07875](https://doi.org/10.21105/joss.07875)
-
-If you make use of any data which has been accessed through the Sonification Suite for a publication it is your own responsibility to appropriately acknowledge the original data source (more information about data sources is provided below).
 
 ## Developers
 

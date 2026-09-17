@@ -98,7 +98,7 @@ export default function PageContainer({
             </Flex>
             <Flex gap={5}>
               <Link
-                href="https://sonification-suite.readthedocs.io/en/latest/about/about/"
+                href="https://sonification-suite.readthedocs.io/en/latest/about/"
                 style={{ textDecoration: "none" }}
                 target="_blank"
                 rel="noopener noreferrer"
