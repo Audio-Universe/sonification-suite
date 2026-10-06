@@ -1,53 +1,56 @@
 import { useNavigate } from "react-router-dom";
 import PageContainer from "../ui/PageContainer";
-import { getImage } from "../../utils/assets";
-import { Tooltip } from "../ui/Tooltip";
-import { LuFilm } from "react-icons/lu";
+import { getImage, randomRange } from "../../utils/assets";
+import { LuExternalLink, LuFilm, LuLayers3, LuLightbulb, LuStar } from "react-icons/lu";
 
 import {
   Box,
-  Alert,
-  Button,
   Card,
-  FileUpload,
   LinkOverlay,
   Link,
-  Image,
   Icon,
-  Input,
-  Dialog,
   Stack,
   Heading,
-  VStack,
-  Table,
   Text,
-  IconButton,
-  chakra,
   HStack,
+  Badge,
 } from "@chakra-ui/react";
-import { apiUrl } from "../../apiConfig";
 
 interface AstroType {
   name: string;
   description: string;
-  page: string;
+  page?: string;
+  href?: string;
+  icon?: React.ElementType;
 }
 
 const astroTypes: AstroType[] = [
   {
     name: "Light Curves",
     description: "Listen to fluctuations in a star's light.",
-    page: "/light-curves",
+    page: "light-curves",
   },
   {
     name: "Constellations",
-    description: "Hear the unique qualities of the 88 constellations.",
-    page: "/constellations",
+    description: "Hear the unique qualities of famous star patterns.",
+    page: "constellations",
   },
   {
     name: "Night Sky",
     description: "Hear the stars at your location appear.",
-    page: "/night-sky",
+    page: "night-sky",
+  },
+  {
+    name: "Data Composer",
+    description: "Upload your own data and compose sonifications in layers.",
+    page: "/data-composer",
+    icon: LuLayers3,
+  },
+  {
+    name: "Suggestions & Examples",
+    description: "Pre-made examples and suggestions for using the Suite.",
+    href: "https://www.audiouniverse.org/sonification-suite/suggestions-and-example-bank",
+    icon: LuLightbulb,
   },
 ];
 
@@ -56,49 +59,84 @@ export default function Planetaria() {
 
   return (
     <PageContainer>
-      <Box as="main" role="main">
-        <Heading as="h1">Step 1: Data</Heading>
-        <br />
-        <HStack flexWrap="nowrap">
-          <Text textStyle="lg" flexShrink={1}>
-            Select a data source to sonify
-          </Text>
-        </HStack>
-        <br />
-        <br />
-        <Stack
-          gap="4"
-          direction="row"
-          wrap="wrap"
-          animation="fade-in 300ms ease-out"
-        >
-          {astroTypes.map((astroType) => (
-            <Tooltip
+      <Heading as="h1">Planetaria</Heading>
+      <br />
+      <HStack flexWrap="nowrap">
+        <Text>
+          Select a data source to sonify
+        </Text>
+      </HStack>
+      <br />
+      <br />
+      <Stack
+        gap="4"
+        direction="row"
+        wrap="wrap"
+        justify={{ base: "center", md: "flex-start" }}
+        animation="fade-in 300ms ease-out"
+      >
+        {astroTypes.map((astroType) => {
+          const isExternal = !!astroType.href;
+
+          return (
+            <Card.Root
+              width="200px"
               key={astroType.name}
-              content="Coming soon!"
-              openDelay={300}
-              disabled={astroType.page !== "/"}
+              _hover={{ transform: "scale(1.05)" }}
+              transition="transform 0.2s ease"
+              variant={isExternal ? "subtle" : "elevated"}
             >
-              <Card.Root
-                width="200px"
-                key={astroType.name}
-                variant="elevated"
-                _hover={{ transform: "scale(1.05)" }}
-                transition="transform 0.2s ease"
-              >
-                <LinkOverlay
-                  as={Link}
-                  onClick={() => navigate(astroType.page)}
-                  cursor={astroType.page === "/" ? "disabled" : "pointer"}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
+              <LinkOverlay
+                as={Link}
+                href={astroType.href}
+                onClick={
+                  !isExternal && astroType.page
+                    ? () => navigate(astroType.page!)
+                    : undefined
+                }
+                target={isExternal ? "_blank" : undefined}
+                rel={isExternal ? "noopener noreferrer" : undefined}
+                cursor="pointer"
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+
+                    if (isExternal) {
+                      window.open(
+                        astroType.href,
+                        "_blank",
+                        "noopener,noreferrer",
+                      );
+                    } else if (astroType.page) {
                       navigate(astroType.page);
                     }
-                  }}
-                >
+                  }
+                }}
+              >
+                {astroType.icon ? (
+                  <Box
+                    bg="black"
+                    height="200px"
+                    width="100%"
+                    display="flex"
+                    alignItems="center"
+                    justifyContent="center"
+                    borderRadius="8px"
+                  >
+                    <Icon
+                      boxSize="80px"
+                      color="white"
+                      strokeWidth={1}
+                      style={{
+                        animation: `twinkle ${randomRange(2, 3)}s infinite alternate`,
+                      }}
+                    >
+                      <astroType.icon />
+                    </Icon>
+                  </Box>
+                ) : (
                   <img
                     src={getImage(astroType.name)}
                     alt={astroType.name}
@@ -109,51 +147,36 @@ export default function Planetaria() {
                       borderRadius: "8px",
                     }}
                   />
-                </LinkOverlay>
-                <Card.Body>
-                  <Card.Title mb="2">{astroType.name}</Card.Title>
-                  <Card.Description>{astroType.description}</Card.Description>
-                </Card.Body>
-              </Card.Root>
-            </Tooltip>
-          ))}
-          <Card.Root
-            width="200px"
-            key="examples"
-            variant="subtle"
-            _hover={{ transform: "scale(1.05)" }}
-            transition="transform 0.2s ease"
-          >
-            <LinkOverlay
-              as={Link}
-              role="button"
-              tabIndex={0}
-              href="https://www.audiouniverse.org/sonification-suite/planetaria/example-bank"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <Box
-                height="200px"
-                width="100%"
-                display="flex"
-                alignItems="center"
-                justifyContent="center"
-                borderRadius="8px"
-              >
-                <Icon boxSize="64px" color="gray.400">
-                  <LuFilm />
-                </Icon>
-              </Box>
-            </LinkOverlay>
-            <Card.Body>
-              <Card.Title mb="2">Example Bank</Card.Title>
-              <Card.Description>
-                Use some of our pre-made examples in your shows.
-              </Card.Description>
-            </Card.Body>
-          </Card.Root>
-        </Stack>
-      </Box>
+                )}
+              </LinkOverlay>
+
+              <Card.Body>
+                <Card.Title mb="2">
+                  {astroType.name}
+                  {isExternal && (
+                    <Icon ml="3" mb="1" boxSize="4" color="gray.500">
+                      <LuExternalLink />
+                    </Icon>
+                  )}
+                </Card.Title>
+                {astroType.name === "Constellations" && (
+                  <Badge
+                    animation="scale-in 500ms ease-out"
+                    colorPalette="teal"
+                    width="fit-content"
+                    alignSelf="center"
+                    mb="2"
+                  >
+                    <LuStar />
+                    Now with Asterisms!
+                  </Badge>
+                )}
+                <Card.Description>{astroType.description}</Card.Description>
+              </Card.Body>
+            </Card.Root>
+          );
+        })}
+      </Stack>
     </PageContainer>
   );
 }

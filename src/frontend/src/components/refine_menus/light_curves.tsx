@@ -1,45 +1,42 @@
 import {
   Box,
   Button,
-  createListCollection,
-  Checkbox,
   Code,
-  Field,
-  Heading,
   Image,
-  Input,
   Text,
-  Flex,
   NumberInput,
   VStack,
   Stack,
-  Select,
   Slider,
   Skeleton,
-  HStack
+  HStack,
 } from "@chakra-ui/react";
-import { RefineMenuProps } from "./RefineMenu";
-import React, { useState, useEffect } from "react";
-import { useLocation } from 'react-router-dom';
+import { RefineMenuProps } from "../../types/refine_menu";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import LoadingMessage from "../ui/LoadingMessage";
 import ErrorMsg from "../ui/ErrorMsg";
-import { apiUrl, lightCurvesAPI, coreAPI } from "../../apiConfig";
+import { lightCurvesAPI } from "../../apiConfig";
 import { apiRequest } from "../../utils/requests";
 import { InfoTip } from "../ui/ToggleTip";
 import { LuArrowRight } from "react-icons/lu";
 import { plotData } from "../../utils/plot";
-import Sonify from "../pages/Sonify";
+import { debounce, fill } from "es-toolkit";
+import NaNHandler, { NanStrategy } from "../ui/NaNHandler";
 
-export default function LightCurves({ dataName, dataRef, onApply }: RefineMenuProps) {
+export default function LightCurves({
+  dataName,
+  dataRef,
+  onApply,
+}: RefineMenuProps) {
   const [imageSrc, setImageSrc] = useState<string | null>(null);
   const [imageLoading, setImageLoading] = useState(true);
 
   // fetched range from backend (x axis min/max)
-  const [cropRange, setCropRange] = useState<[number, number]>([0,0]);
+  const [cropRange, setCropRange] = useState<[number, number]>([0, 0]);
 
   // controlled slider value
-  const [cropValues, setCropValues] = useState<[number, number]>([0,0]);
-  
+  const [cropValues, setCropValues] = useState<[number, number]>([0, 0]);
+
   const [startText, setStartText] = useState(String(cropValues[0]));
   const [endText, setEndText] = useState(String(cropValues[1]));
 
@@ -48,14 +45,21 @@ export default function LightCurves({ dataName, dataRef, onApply }: RefineMenuPr
   // sigma value for data smoothing
   const [sigma, setSigma] = useState(0);
 
+  const [hasNans, setHasNans] = useState(false);
+  const [nanStrategy, setNanStrategy] = useState<NanStrategy>("interpolate");
+  const [fillWith, setFillWith] = useState("min");
+  const [nanHandled, setNanHandled] = useState(false);
+
   const [applyLoading, setApplyLoading] = useState(false);
+
   
+
   // fetch plot
   useEffect(() => {
     let mounted = true;
     async function fetchPlot() {
       try {
-        const base64 = await plotData(dataRef, 'light_curves');
+        const base64 = await plotData(dataRef, "light_curves");
         if (!mounted) return;
         setImageSrc(`data:image/svg+xml;base64,${base64}`);
       } catch (err) {
@@ -65,106 +69,176 @@ export default function LightCurves({ dataName, dataRef, onApply }: RefineMenuPr
       }
     }
     fetchPlot();
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+    };
   }, [dataRef]);
 
-  // fetch cropRange
+  // fetch cropRange and do NaN check on first load
   useEffect(() => {
-    
     if (!dataRef) return;
 
     let mounted = true;
-    async function fetchCropRange() {
-    
-      const endpoint = `${lightCurvesAPI}/get-range/`;
+    async function fetchRangeAndNans() {
+      const endpoint = `${lightCurvesAPI}/get-range-and-nans/`;
       try {
-        const payload = { file_ref: dataRef}
-        const result = await apiRequest(endpoint, payload, 'POST')
+        const payload = { file_ref: dataRef };
+        const result = await apiRequest(endpoint, payload, "POST");
 
-        if (mounted && Array.isArray(result.range) && result.range.length === 2) {
-          const r: [number, number] = [Number(result.range[0].toFixed(2)),
-                                       Number(result.range[1].toFixed(2))];
+        if (
+          mounted &&
+          Array.isArray(result.range) &&
+          result.range.length === 2
+        ) {
+          const r: [number, number] = [
+            Number(result.range[0].toFixed(2)),
+            Number(result.range[1].toFixed(2)),
+          ];
           setCropRange(r);
           setCropValues(r);
           setStartText(String(r[0]));
           setEndText(String(r[1]));
-          setSlidersLoading(false)
-        }
 
+          setHasNans(result.has_nans);
+          setSlidersLoading(false);
+
+          // Make sure NaNs are handled in the plot from the start
+          if (result.has_nans) {
+            fetchPreviewPlot(r, sigma, nanStrategy, fillWith);
+            setNanHandled(true);
+          }
+        }
       } catch (error) {
         console.error("Error fetching x-axis range:", error);
         setSlidersLoading(false);
       }
     }
-    fetchCropRange();
-    return () => { 
-      mounted = false; 
+    fetchRangeAndNans();
+    return () => {
+      mounted = false;
     };
   }, [dataRef]);
 
   // prepare marks when cropRange exists
-  const sliderMarks = cropRange ? [
+  const sliderMarks = cropRange
+    ? [
         { value: cropRange[0], label: String(cropRange[0]) },
         { value: cropRange[1], label: String(cropRange[1]) },
       ]
-  : [];
-  
+    : [];
 
   // preview function
-  const fetchPreviewPlot = async (range: [number, number] | null, sigmaVal: number) => {
-    if (!range) return;
-    setImageLoading(true);
+  const fetchPreviewPlot = useCallback(
+    async (
+      range: [number, number] | null,
+      sigmaVal: number,
+      nanStrategy: NanStrategy,
+      fillWith: string,
+    ) => {
+      if (!range) return;
+      setImageLoading(true);
 
-    const endpoint = `${lightCurvesAPI}/preview-refined/`;
-    const payload = {
-      data_name: dataName,
-      file_ref: dataRef,
-      new_range: range,
-      sigma: sigmaVal,
+      const endpoint = `${lightCurvesAPI}/preview-refined/`;
+      const payload = {
+        data_name: dataName,
+        file_ref: dataRef,
+        new_range: range,
+        sigma: sigmaVal,
+        nan_strategy: nanStrategy,
+        fill_with: fillWith,
+      };
+
+      try {
+        const result = await apiRequest(endpoint, payload);
+        setImageSrc(`data:image/svg+xml;base64,${result.image}`);
+        setHasNans(result.nans_after_trim);
+      } catch (err) {
+        console.error("Error previewing plot:", err);
+      } finally {
+        setImageLoading(false);
+      }
+    },
+    [dataName, dataRef],
+  );
+
+  // Wrapper which delays fetching the plot by 300ms - this prevents spamming the backend every time a slider moves
+  const debouncedFetchPreviewPlot = useMemo(
+    () => debounce(fetchPreviewPlot, 300),
+    [fetchPreviewPlot],
+  );
+
+  useEffect(() => {
+    return () => {
+      debouncedFetchPreviewPlot.cancel();
     };
-
-    try {
-      const result = await apiRequest(endpoint, payload);
-      setImageSrc(`data:image/svg+xml;base64,${result.image}`);
-    } catch (err) {
-      console.error("Error previewing plot:", err);
-    } finally {
-      setImageLoading(false);
-    }
-  };
-
+  }, [debouncedFetchPreviewPlot]);
 
   const handleClickApply = async () => {
+    setApplyLoading(true);
 
-    setApplyLoading(true)
-
-    const endpoint = `${lightCurvesAPI}/save-refined/`
+    const endpoint = `${lightCurvesAPI}/save-refined/`;
     const payload = {
       data_name: dataName,
       file_ref: dataRef,
       new_range: cropValues,
-      sigma: sigma
-    }
+      sigma: sigma,
+      nan_strategy: nanStrategy,
+      fill_with: fillWith,
+    };
 
-    const result = await apiRequest(endpoint, payload)
+    const result = await apiRequest(endpoint, payload);
 
     if (onApply) {
-        onApply(result.file_ref); // pass new filepath up to parent Refine.tsx
-      }
-    
-      setApplyLoading(false)
+      onApply({newRef: result.file_ref}); // pass new filepath up to parent Refine.tsx
+    }
 
-  }
+    setApplyLoading(false);
+  };
 
-  const applyButtonOn = cropValues && cropRange ?
-                            cropValues![0] == cropRange![0] &&
-                            cropValues![1] == cropRange![1] &&
-                            sigma == 0
-                            ? false
-                            : true
-                          : false
+  const handleNanStrategyChange = (strategy: NanStrategy) => {
+    setNanStrategy(strategy);
+    fetchPreviewPlot(cropValues, sigma, strategy, fillWith);
+  };
 
-  
+  const handleFillWithChange = (value: string) => {
+    setFillWith(value);
+    fetchPreviewPlot(cropValues, sigma, nanStrategy, value);
+  };
+
+  const slidersMoved =
+    cropValues && cropRange
+      ? cropValues![0] == cropRange![0] &&
+        cropValues![1] == cropRange![1] &&
+        sigma == 0
+        ? false
+        : true
+      : false;
+
+  const applyButtonOn = slidersMoved || nanHandled;
+
+  // Apply button component separate to TSX as we use it in different places depending on viewport size
+  const applyButton = !slidersLoading ? (
+    <HStack
+      gap="5"
+      justify="center"
+      w="100%"
+      animation="fade-in 300ms ease-out"
+    >
+      <Button
+        onClick={handleClickApply}
+        colorPalette="teal"
+        loading={applyLoading}
+        loadingText="Saving..."
+        variant={applyButtonOn ? "solid" : "surface"}
+      >
+        {applyButtonOn ? "Apply & Continue" : "Skip"} <LuArrowRight />
+      </Button>
+    </HStack>
+  ) : (
+    <Box width="100%">
+      <Skeleton height="4em" />
+    </Box>
+  );
 
   return (
     <Stack
@@ -173,14 +247,16 @@ export default function LightCurves({ dataName, dataRef, onApply }: RefineMenuPr
       justify="center"
       direction={{ base: "column", md: "row" }}
     >
-      <Box flex="1" maxWidth="50%">
-        <VStack justify="center" gap="16">
+      <Box flex="1" maxWidth={{ base: "100%", md: "50%" }}>
+        <VStack justify="center" gap="8">
           {/* render slider only when we have cropRange & cropValues */}
           {!slidersLoading && cropRange && cropValues ? (
             <VStack>
-              <HStack align="center">
-                <Text textStyle="md">Trim start</Text>
-
+              <Stack
+                direction={{ base: "column", sm: "row" }}
+                align={{ base: "stretch", sm: "center" }}
+                gap="3"
+              >
                 <NumberInput.Root
                   value={startText}
                   min={cropRange[0]}
@@ -195,17 +271,24 @@ export default function LightCurves({ dataName, dataRef, onApply }: RefineMenuPr
                       );
                       setCropValues(([_, end]) => [clamped, end]);
                       setStartText(String(clamped));
-                      fetchPreviewPlot([clamped, cropValues[1]], sigma);
+                      fetchPreviewPlot(
+                        [clamped, cropValues[1]],
+                        sigma,
+                        nanStrategy,
+                        fillWith,
+                      );
                     } else {
                       setStartText(String(cropValues[0]));
                     }
                   }}
                 >
-                  <NumberInput.Input />
+                  <HStack>
+                    <NumberInput.Label whiteSpace="nowrap">
+                      Trim start
+                    </NumberInput.Label>
+                    <NumberInput.Input aria-valuetext={startText} />
+                  </HStack>
                 </NumberInput.Root>
-
-                <Text textStyle="md">and end</Text>
-
                 <NumberInput.Root
                   value={endText}
                   min={cropValues[0]}
@@ -220,17 +303,27 @@ export default function LightCurves({ dataName, dataRef, onApply }: RefineMenuPr
                       );
                       setCropValues(([start, _]) => [start, clamped]);
                       setEndText(String(clamped));
-                      fetchPreviewPlot([cropValues[0], clamped], sigma);
+                      fetchPreviewPlot(
+                        [cropValues[0], clamped],
+                        sigma,
+                        nanStrategy,
+                        fillWith,
+                      );
                     } else {
                       setEndText(String(cropValues[1]));
                     }
                   }}
                 >
-                  <NumberInput.Input />
+                  <HStack>
+                    <NumberInput.Label whiteSpace="nowrap">
+                      and end
+                    </NumberInput.Label>
+                    <NumberInput.Input aria-valuetext={endText} />
+                  </HStack>
                 </NumberInput.Root>
 
                 <Text textStyle="md">points</Text>
-              </HStack>
+              </Stack>
               <Slider.Root
                 w="100%"
                 step={0.01}
@@ -244,9 +337,12 @@ export default function LightCurves({ dataName, dataRef, onApply }: RefineMenuPr
                   setCropValues(e.value as [number, number]);
                   setStartText(String(e.value[0]));
                   setEndText(String(e.value[1]));
-                }}
-                onValueChangeEnd={(e) => {
-                  fetchPreviewPlot(e.value as [number, number], sigma); // only runs on mouse release
+                  debouncedFetchPreviewPlot(
+                    e.value as [number, number],
+                    sigma,
+                    nanStrategy,
+                    fillWith,
+                  );
                 }}
               >
                 <Slider.Control>
@@ -273,9 +369,12 @@ export default function LightCurves({ dataName, dataRef, onApply }: RefineMenuPr
               animation="fade-in 300ms ease-out"
               onValueChange={(e) => {
                 setSigma(e.value[0]);
-              }}
-              onValueChangeEnd={(e) => {
-                fetchPreviewPlot(cropValues, e.value[0]);
+                debouncedFetchPreviewPlot(
+                  cropValues,
+                  e.value[0],
+                  nanStrategy,
+                  fillWith,
+                );
               }}
             >
               <HStack>
@@ -300,33 +399,21 @@ export default function LightCurves({ dataName, dataRef, onApply }: RefineMenuPr
               <Skeleton height="4em" />
             </Box>
           )}
-          {!slidersLoading ? (
-            <HStack
-              gap="5"
-              justify="center"
-              w="100%"
-              animation="fade-in 300ms ease-out"
-            >
-              <Button
-                w="40%"
-                onClick={handleClickApply}
-                colorPalette="teal"
-                loading={applyLoading}
-                loadingText="Saving..."
-                variant={applyButtonOn ? "solid" : "surface"}
-              >
-                {applyButtonOn ? "Apply & Continue" : "Skip"} <LuArrowRight />
-              </Button>
-            </HStack>
-          ) : (
-            <Box width="100%">
-              <Skeleton height="4em" />
-            </Box>
+          {hasNans && (
+            <NaNHandler
+              strategy={nanStrategy}
+              onStrategyChange={handleNanStrategyChange}
+              fillWith={fillWith}
+              onFillWithChange={handleFillWithChange}
+            />
           )}
+          <Box hideBelow="md" width="100%">
+            {applyButton}
+          </Box>
         </VStack>
       </Box>
 
-      <Box flex="1">
+      <Box flex="1" borderWidth="1px" borderRadius="md">
         {imageLoading ? (
           <LoadingMessage msg="" icon="pulsar" />
         ) : imageSrc ? (
@@ -339,6 +426,9 @@ export default function LightCurves({ dataName, dataRef, onApply }: RefineMenuPr
         ) : (
           <ErrorMsg message="Unable to plot data." />
         )}
+      </Box>
+      <Box hideFrom="md" width="100%">
+        {applyButton}
       </Box>
     </Stack>
   );

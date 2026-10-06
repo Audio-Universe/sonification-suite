@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from 'react-router-dom';
-import { LuTelescope } from "react-icons/lu";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { LuFileUp, LuFilm, LuTelescope } from "react-icons/lu";
 import PageContainer from "../ui/PageContainer";
 import { getImage, randomRange } from "../../utils/assets";
-import { coreAPI } from "../../apiConfig";
+import { coreAPI, constellationsAPI } from "../../apiConfig";
 import { SuggestedData } from "./Lightcurves";
 
 import {
@@ -16,7 +16,7 @@ import {
   LinkOverlay,
   Link,
   Image,
-  Field, 
+  Field,
   Input,
   InputGroup,
   Dialog,
@@ -29,260 +29,296 @@ import {
   chakra,
   HStack,
   Combobox,
-  useListCollection,
+  createListCollection,
   useFilter,
-  Portal
+  Portal,
+  FileUpload,
 } from "@chakra-ui/react";
+import { NavigationState } from "../../types/navigation";
+import ErrorMsg from "../ui/ErrorMsg";
+import {DataImport, ImportResult} from "../utils/DataImport";
 
-export const constellations = [
-  { label: "Pisces", value: "Pisces" },
-  { label: "Cetus", value: "Cetus" },
-  { label: "Andromeda", value: "Andromeda" },
-  { label: "Phoenix", value: "Phoenix" },
-  { label: "Pegasus", value: "Pegasus" },
-  { label: "Sculptor", value: "Sculptor" },
-  { label: "Cassiopeia", value: "Cassiopeia" },
-  { label: "Octans", value: "Octans" },
-  { label: "Cepheus", value: "Cepheus" },
-  { label: "Tucana", value: "Tucana" },
-  { label: "Hydrus", value: "Hydrus" },
-  { label: "Ursa Minor", value: "Ursa Minor" },
-  { label: "Eridanus", value: "Eridanus" },
-  { label: "Perseus", value: "Perseus" },
-  { label: "Triangulum", value: "Triangulum" },
-  { label: "Fornax", value: "Fornax" },
-  { label: "Aries", value: "Aries" },
-  { label: "Horologium", value: "Horologium" },
-  { label: "Reticulum", value: "Reticulum" },
-  { label: "Camelopardalis", value: "Camelopardalis" },
-  { label: "Mensa", value: "Mensa" },
-  { label: "Taurus", value: "Taurus" },
-  { label: "Dorado", value: "Dorado" },
-  { label: "Caelum", value: "Caelum" },
-  { label: "Pictor", value: "Pictor" },
-  { label: "Auriga", value: "Auriga" },
-  { label: "Orion", value: "Orion" },
-  { label: "Lepus", value: "Lepus" },
-  { label: "Columba", value: "Columba" },
-  { label: "Monoceros", value: "Monoceros" },
-  { label: "Gemini", value: "Gemini" },
-  { label: "Carina", value: "Carina" },
-  { label: "Puppis", value: "Puppis" },
-  { label: "Canis Major", value: "Canis Major" },
-  { label: "Lynx", value: "Lynx" },
-  { label: "Volans", value: "Volans" },
-  { label: "Canis Minor", value: "Canis Minor" },
-  { label: "Chamaeleon", value: "Chamaeleon" },
-  { label: "Cancer", value: "Cancer" },
-  { label: "Vela", value: "Vela" },
-  { label: "Ursa Major", value: "Ursa Major" },
-  { label: "Hydra", value: "Hydra" },
-  { label: "Pyxis", value: "Pyxis" },
-  { label: "Leo", value: "Leo" },
-  { label: "Leo Minor", value: "Leo Minor" },
-  { label: "Draco", value: "Draco" },
-  { label: "Antlia", value: "Antlia" },
-  { label: "Sextans", value: "Sextans" },
-  { label: "Crater", value: "Crater" },
-  { label: "Centaurus", value: "Centaurus" },
-  { label: "Musca", value: "Musca" },
-  { label: "Virgo", value: "Virgo" },
-  { label: "Crux", value: "Crux" },
-  { label: "Corvus", value: "Corvus" },
-  { label: "Coma Berenices", value: "Coma Berenices" },
-  { label: "Canes Venatici", value: "Canes Venatici" },
-  { label: "Boötes", value: "Boötes" },
-  { label: "Circinus", value: "Circinus" },
-  { label: "Apus", value: "Apus" },
-  { label: "Lupus", value: "Lupus" },
-  { label: "Libra", value: "Libra" },
-  { label: "Triangulum Australe", value: "Triangulum Australe" },
-  { label: "Serpens", value: "Serpens" },
-  { label: "Norma", value: "Norma" },
-  { label: "Corona Borealis", value: "Corona Borealis" },
-  { label: "Scorpius", value: "Scorpius" },
-  { label: "Hercules", value: "Hercules" },
-  { label: "Ophiuchus", value: "Ophiuchus" },
-  { label: "Ara", value: "Ara" },
-  { label: "Pavo", value: "Pavo" },
-  { label: "Sagittarius", value: "Sagittarius" },
-  { label: "Corona Australis", value: "Corona Australis" },
-  { label: "Telescopium", value: "Telescopium" },
-  { label: "Lyra", value: "Lyra" },
-  { label: "Scutum", value: "Scutum" },
-  { label: "Aquila", value: "Aquila" },
-  { label: "Sagitta", value: "Sagitta" },
-  { label: "Vulpecula", value: "Vulpecula" },
-  { label: "Cygnus", value: "Cygnus" },
-  { label: "Capricornus", value: "Capricornus" },
-  { label: "Delphinus", value: "Delphinus" },
-  { label: "Microscopium", value: "Microscopium" },
-  { label: "Indus", value: "Indus" },
-  { label: "Aquarius", value: "Aquarius" },
-  { label: "Equuleus", value: "Equuleus" },
-  { label: "Piscis Austrinus", value: "Piscis Austrinus" },
-  { label: "Grus", value: "Grus" },
-  { label: "Lacerta", value: "Lacerta" }
-];
+interface PatternListResponse {
+  constellations: string[];
+  asterisms: string[];
+}
+
+interface PatternItem {
+  label: string;
+  value: string;
+  category: "Constellations" | "Asterisms";
+}
+
+interface SuggestedPattern extends SuggestedData {
+  category: "Constellations" | "Asterisms";
+}
 
 export default function Constellations() {
+  const soniType = "constellations";
 
-  const soniType = 'constellations'
-  
   const navigate = useNavigate();
-  
-  const [suggested, setSuggested] = useState<SuggestedData[]>([])
-  
+
+  const [suggested, setSuggested] = useState<SuggestedPattern[]>([]);
+
+  const [importErrorMessage, setImportErrorMessage] = useState("");
+
+  // Fetch suggested constellations on load
   useEffect(() => {
-        fetch(`${coreAPI}/suggested-data/${soniType}/`)
-            .then((res) => res.json())
-            .then((data) => {
-                setSuggested(data);
-                console.log(suggested)
-            })
-            .catch((err) => {
-                console.error("Failed to fetch suggested data:", err);
-            });
-    }, []
-  );
+    fetch(`${coreAPI}/suggested-data/${soniType}/`)
+      .then((res) => res.json())
+      .then((data) => {
+        setSuggested(data);
+      })
+      .catch((err) => {
+        console.error("Failed to fetch suggested data:", err);
+      });
+  }, []);
 
-  const handleSelectConstellation = (constellationName: string) => {
-    if (!constellationName) return;
+  const [patternItems, setPatternItems] = useState<PatternItem[]>([]);
 
-    console.log("Constellation clicked:", constellationName);
-    const dataName = constellationName
-    const dataRef = ""
-    
-    navigate('/refine', { 
-      state: { dataName, dataRef, soniType } // Navigate to step 2
-    });
+  // Fetch the full list of constellations + asterisms on load
+  useEffect(() => {
+    fetch(`${constellationsAPI}/list/`)
+      .then((res) => res.json())
+      .then((list: PatternListResponse) => {
+        setPatternItems([
+          ...list.constellations.map((name) => ({
+            label: name,
+            value: name,
+            category: "Constellations" as const,
+          })),
+          ...list.asterisms.map((name) => ({
+            label: name,
+            value: name,
+            category: "Asterisms" as const,
+          })),
+        ]);
+      })
+      .catch((err) => {
+        console.error("Failed to fetch constellation/asterism list:", err);
+      });
+  }, []);
+
+  const handleSelectPattern = (item: PatternItem) => {
+    if (!item.value) return;
+
+    const state: NavigationState = {
+      dataName: item.value,
+      soniType,
+      constellationType:
+        item.category === "Asterisms" ? "asterism" : "constellation",
+    };
+
+    navigate("../refine", { state });
   };
 
-  
-  
-  // Needed to use ComboBox search/filter
-  const { contains } = useFilter({ sensitivity: "base" })
-  const { collection, filter } = useListCollection({
-    initialItems: constellations,
-    filter: contains,
-  })
+  const handleImportSuccess = (result: ImportResult) => {
+    const state: NavigationState = {
+      dataName: result.import_info.data_name as string,
+      sourceDataRef: result.file_ref,
+      soniType,
+      constellationType: result.import_info.stick_figure
+        ? "importedStickFigure"
+        : "importedBoundaries",
+      importedNStars: result.import_info.star_count as number,
+      importedOrder: result.import_info.custom_order as number[],
+    };
+    navigate("../refine", { state });
+  }
 
+  // Needed to use ComboBox search/filter
+  const { contains } = useFilter({ sensitivity: "base" });
+  const [searchValue, setSearchValue] = useState("");
+
+  const filteredItems = useMemo(
+    () => patternItems.filter((item) => contains(item.label, searchValue)),
+    [patternItems, searchValue, contains],
+  );
+
+  const collection = useMemo(
+    () => createListCollection({ items: filteredItems }),
+    [filteredItems],
+  );
 
   return (
     <PageContainer>
-      <Box as="main" role="main">
-        <Heading as="h1">Constellations</Heading>
-        <br />
-        <Text textStyle="lg">
-          Search for a specific constellation or choose from the suggestions
-          below
-        </Text>
-        <br />
-        <br />
-        <Box display="flex" justifyContent="center">
-          <Combobox.Root
-            collection={collection}
-            onInputValueChange={(e) => filter(e.inputValue)}
-            onValueChange={(details) => {
-              if (details.value.length > 0) {
+      <Heading as="h1" wordBreak="normal" overflowWrap="normal">
+        Constellations
+      </Heading>
+      <br />
+      <HStack gap={0}>
+        <Text>Search for a star pattern, pick a suggestion, or</Text>
+        <DataImport soniType={soniType} onImportSuccess={handleImportSuccess} onImportError={setImportErrorMessage}/>
+      </HStack>
+      <br />
+      <br />
+      <Box display="flex" justifyContent="center">
+        <Combobox.Root
+          aria-label="Search constellations and asterisms"
+          collection={collection}
+          onInputValueChange={(e) => setSearchValue(e.inputValue)}
+          onValueChange={(details) => {
+            if (details.value.length > 0) {
+              const selectedItem = patternItems.find(
+                (item) => item.value === details.value[0],
+              );
+
+              if (selectedItem) {
                 setTimeout(() => {
-                  // short delay
-                  handleSelectConstellation(details.value[0]);
-                }, 300);
+                  handleSelectPattern(selectedItem);
+                }, 20);
               }
-            }}
-            width="50%"
-          >
-            <Combobox.Control>
-              <InputGroup startElement={<LuTelescope size="1.1rem" />}>
-                <Combobox.Input placeholder="Search for a constellation" />
-              </InputGroup>
-              <Combobox.IndicatorGroup>
-                <Combobox.ClearTrigger />
-                <Combobox.Trigger />
-              </Combobox.IndicatorGroup>
-            </Combobox.Control>
-            <Portal>
-              <Combobox.Positioner>
-                <Combobox.Content>
-                  <Combobox.Empty>No items found</Combobox.Empty>
-                  {collection.items.map((item) => (
-                    <Combobox.Item item={item} key={item.value}>
-                      {item.label}
-                      <Combobox.ItemIndicator />
-                    </Combobox.Item>
-                  ))}
-                </Combobox.Content>
-              </Combobox.Positioner>
-            </Portal>
-          </Combobox.Root>
-        </Box>
-        <br />
-        <br />
-        <Box animation="fade-in 300ms ease-out">
-          <Heading size="2xl" as="h2">
-            Suggested
-          </Heading>
-          <br />
-          <Stack gap="4" direction="row" wrap="wrap">
-            {suggested.map((suggestion) => (
-              <Card.Root
-                width="200px"
-                key={suggestion.name}
-                variant="elevated"
-                _hover={{ transform: "scale(1.05)" }}
-                transition="transform 0.2s ease"
-                cursor="pointer"
-                tabIndex={0}
-                role="button"
-                aria-label={`Sonify ${suggestion.name}: ${suggestion.description}`}
-                onClick={() => handleSelectConstellation(suggestion.name)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    handleSelectConstellation(suggestion.name);
-                  }
-                }}
-              >
-                <Box
-                  position="relative"
-                  bg="black"
-                  borderRadius="8px"
-                  overflow="hidden"
-                >
-                  <img
-                    src={getImage(suggestion.name, ".png")}
-                    alt={`${suggestion.name} constellation`}
-                    style={{
-                      width: "100%",
-                      display: "block",
-                      borderRadius: "8px",
-                      animation: `twinkle ${randomRange(2, 3)}s infinite alternate`,
-                    }}
-                  />
-                </Box>
-                <Card.Body>
-                  <Card.Title mb="2">{suggestion.name}</Card.Title>
-                  <Card.Description>{suggestion.description}</Card.Description>
-                </Card.Body>
-              </Card.Root>
-            ))}
-          </Stack>
-          <br />
-        </Box>
-        <Text textAlign="center" fontSize="sm" color="gray.500" mt={4}>
-          Image credit:{" "}
-          <Link
-            href="https://noirlab.edu"
-            color="gray.400"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            NSF NOIRLab
-          </Link>{" "}
-          (CC BY 4.0)
-        </Text>
+            }
+          }}
+          width={{ base: "100%", md: "50%" }}
+          maxWidth="600px"
+        >
+          <Combobox.Control>
+            <InputGroup startElement={<LuTelescope size="1.1rem" />}>
+              <Combobox.Input placeholder="Search for a constellation or asterism" />
+            </InputGroup>
+            <Combobox.IndicatorGroup>
+              <Combobox.ClearTrigger />
+              <Combobox.Trigger />
+            </Combobox.IndicatorGroup>
+          </Combobox.Control>
+          <Portal>
+            <Combobox.Positioner>
+              <Combobox.Content>
+                <Combobox.Empty>No items found</Combobox.Empty>
+                {(["Constellations", "Asterisms"] as const).map((category) => {
+                  const itemsInCategory = collection.items.filter(
+                    (item) => item.category === category,
+                  );
+                  if (itemsInCategory.length === 0) return null;
+                  return (
+                    <Combobox.ItemGroup key={category}>
+                      <Combobox.ItemGroupLabel
+                        fontWeight="bold"
+                        fontSize="xs"
+                        color="teal.500"
+                        textTransform="uppercase"
+                        letterSpacing="widest"
+                        pt={2}
+                        pb={1}
+                      >
+                        {category}
+                      </Combobox.ItemGroupLabel>
+                      {itemsInCategory.map((item) => (
+                        <Combobox.Item item={item} key={item.value}>
+                          {item.label}
+                          <Combobox.ItemIndicator />
+                        </Combobox.Item>
+                      ))}
+                    </Combobox.ItemGroup>
+                  );
+                })}
+              </Combobox.Content>
+            </Combobox.Positioner>
+          </Portal>
+        </Combobox.Root>
       </Box>
+      <br />
+      {importErrorMessage && (
+        <Box width="fit-content" maxW="100%" mx="auto" mt={3}>
+          <ErrorMsg
+            message={importErrorMessage}
+            onClose={() => setImportErrorMessage("")}
+          />
+        </Box>
+      )}
+      <Alert.Root
+              colorPalette="teal"
+              size="sm"
+              width="fit-content"
+              mb={2}
+              mx="auto"
+              animation="fade-in 300ms ease-out"
+            >
+              <Alert.Indicator>
+                <LuFilm />
+              </Alert.Indicator>
+              <Alert.Content color="fg">
+                <Alert.Title>
+                  <Link
+                    href="https://colab.research.google.com/github/Audio-Universe/sonified-night-sky/blob/main/StarsAppearingConstellationColab.ipynb"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Try our Google Colab tool to create an audio-visual Constellation →
+                  </Link>
+                </Alert.Title>
+              </Alert.Content>
+            </Alert.Root>
+      <br />
+      <Box animation="fade-in 300ms ease-out">
+        <Heading size="2xl" as="h2">
+          Suggested
+        </Heading>
+        <br />
+        <Stack
+          gap="4"
+          direction="row"
+          wrap="wrap"
+          justify={{ base: "center", md: "flex-start" }}
+          animation="fade-in 300ms ease-out"
+        >
+          {suggested.map((suggestion) => (
+            <Card.Root
+              width="200px"
+              key={suggestion.name}
+              variant="elevated"
+              _hover={{ transform: "scale(1.05)" }}
+              transition="transform 0.2s ease"
+              cursor="pointer"
+              as="button"
+              aria-label={`Sonify ${suggestion.name}`}
+              onClick={() =>
+                handleSelectPattern({
+                  label: suggestion.name,
+                  value: suggestion.name,
+                  category: suggestion.category,
+                })
+              }
+            >
+              <Box
+                position="relative"
+                bg="black"
+                borderRadius="8px"
+                overflow="hidden"
+              >
+                <img
+                  src={getImage(suggestion.name, ".svg")}
+                  alt={`Outline of the ${suggestion.name} constellation, overlaid with its associated mythological figure.`}
+                  style={{
+                    width: "100%",
+                    display: "block",
+                    borderRadius: "8px",
+                    animation: `twinkle ${randomRange(2, 3)}s infinite alternate`,
+                  }}
+                />
+              </Box>
+              <Card.Body>
+                <Card.Title mb="2">{suggestion.name}</Card.Title>
+                <Card.Description>{suggestion.description}</Card.Description>
+              </Card.Body>
+            </Card.Root>
+          ))}
+        </Stack>
+        <br />
+      </Box>
+      <Text textAlign="center" fontSize="sm" color="fg.muted" mt={4}>
+        Image credit:{" "}
+        <Link
+          href="https://noirlab.edu"
+          color="gray.400"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          NSF NOIRLab
+        </Link>{" "}
+        (CC BY 4.0)
+      </Text>
     </PageContainer>
   );
 }

@@ -14,11 +14,9 @@ from light_curves import router as light_curve_router
 from constellations import router as constellations_router
 from night_sky import router as night_sky_router
 from core import router as core_router
-from settings import router as settings_router
+from data_composer import router as composer_router
 from paths import SYNTHS_DIR, SAMPLES_DIR, TMP_DIR, ROOT_DIR
-from sounds import cache_online_assets
 from contextlib import asynccontextmanager
-from config import GITHUB_USER, GITHUB_REPO
 from StorageManager import StorageManager
 from context import session_id_var
 from datetime import datetime
@@ -27,14 +25,6 @@ import asyncio, os, httpx, psutil, tracemalloc, time, threading, shutil, sys, tr
 # fcntl package is only available on unix systems
 if sys.platform != "win32":
     import fcntl
-
-
-async def safe_cache_assets():
-    try:
-        await cache_online_assets()
-        print("Cache complete")
-    except Exception as e:
-        print("Error caching assets:", e)
 
 
 # Initialize storage/cleanup manager
@@ -131,7 +121,7 @@ async def session_middleware(request: Request, call_next):
 
 
 # Import API endpoints
-for router in [light_curve_router, constellations_router, night_sky_router, core_router, settings_router]:
+for router in [light_curve_router, constellations_router, night_sky_router, core_router, composer_router]:
     app.include_router(router)
 
 @app.get("/")

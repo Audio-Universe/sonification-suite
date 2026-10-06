@@ -1,0 +1,8 @@
+name: "Kepler 9"
+
+description: "Kepler-9b (19-day orbit) and Kepler-9c (38-day orbit) cause short dips in light on top of the star's natural variations."
+
+ra: 285.574
+dec: 38.401
+
+category: "exoplanet"

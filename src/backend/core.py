@@ -1,15 +1,16 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File, Cookie, Response, Request
+from fastapi import APIRouter, HTTPException, UploadFile, File, Cookie, Response, Request, BackgroundTasks, Form
 from fastapi.responses import FileResponse
-from extensions import sonify
 from pathlib import Path
-from paths import TMP_DIR, STYLE_FILES_DIR, SUGGESTED_DATA_DIR, SAMPLES_DIR, HYG_DATA
-from sounds import all_sounds, online_sounds, local_sounds, asset_cache, format_name
-from config import GITHUB_USER, GITHUB_REPO
+from paths import TMP_DIR, STYLE_FILES_DIR, SUGGESTED_DATA_DIR, SYNTHS_DIR, SAMPLES_DIR
 from context import session_id_var
-from utils import resolve_file, is_number
-from request_models import DataRequest, SoundRequest, CustomStyleSettings, SonificationRequest
-import logging, httpx, yaml, os, uuid, aiofiles, zipfile, traceback, base64, gc
+from utils import resolve_file, read_YAML_file, write_YAML_file, is_synth, write_sound_to_style, is_time_series, cleanup_old_layers
+from generator_mods import GENERATOR_MODS
+from request_models import DataRequest, CustomStyleSettings, LayerRequest, SonificationRequest, SoundInfo, VolumeRequest
+import logging, yaml, os, uuid, traceback, base64, gc, re, csv, shutil, math, tempfile, pickle
 from param_descriptions import INPUTS, OUTPUTS
+from night_sky import handle_observer
+from analytics import log_event
+from strauss import AudioFigure
 
 import numpy as np
 import pandas as pd
@@ -17,10 +18,9 @@ import matplotlib
 matplotlib.use("Agg") 
 from matplotlib.figure import Figure
 from scipy.io import wavfile
-from scipy.signal import spectrogram
+from scipy.signal import spectrogram, resample_poly
 from io import BytesIO
-from astropy.io import fits
-from astropy.table import Table
+from pydub import AudioSegment
 
 
 router = APIRouter(prefix='/core')
@@ -28,15 +28,15 @@ router = APIRouter(prefix='/core')
 logging.basicConfig(level=logging.DEBUG)
 LOG = logging.getLogger(__name__)
 
-# Useful constants for '/upload-data/' endpoint
-ACCEPTED_UPLOAD_FORMATS = ['.csv', '.fits']
-SESSION_QUOTA_MB = 50
-SESSION_QUOTA_BYTES = SESSION_QUOTA_MB * 1024 * 1024
+# Maximum upload quota per session
+UPLOAD_QUOTA_MB = 50
+UPLOAD_QUOTA_BYTES = UPLOAD_QUOTA_MB * 1024 * 1024
 
 FORMATTED_FILENAMES = {
     'light_curves': 'Light Curve',
     'constellations': 'Constellation',
-    'night_sky': 'Night Sky'
+    'night_sky': 'Night Sky',
+    'data_composer': 'Data Composer'
 }
 
 MASTER_VOL = 0.5
@@ -44,8 +44,9 @@ MASTER_VOL = 0.5
 
 @router.get('/session/')
 def get_or_create_session(
+    connection: Request,
     response: Response,
-    session_id: str | None = Cookie(None)
+    session_id: str | None = Cookie(None),
 ):
     if not session_id:
         session_id = str(uuid.uuid4())
@@ -58,62 +59,192 @@ def get_or_create_session(
             secure=True,
             path='/'
         )
+        log_event(session_id=session_id, ip=connection.client.host, event='session_start')
+        
 
     user_dir = TMP_DIR / session_id
     user_dir.mkdir(exist_ok=True)
 
     return {'session_id': session_id}
 
-def get_session_size(session_dir: str) -> int:
-    """Returns total size in bytes of all files in a session directory."""
+def get_uploads_dir_size(uploads_dir: str) -> int:
+    """Returns total size in bytes of all files in a session's uploads directory."""
     try:
         return sum(
             f.stat().st_size
-            for f in Path(session_dir).rglob('*')
+            for f in Path(uploads_dir).rglob('*')
             if f.is_file()
         )
     except Exception as e:
         LOG.warning("Could not calculate session size: %s", e)
         return 0
 
+
 @router.post('/generate-sonification/')
-def generate_sonification(request: SonificationRequest):
-        
-    # Resolve data and style file names to actual paths in backend
-    data_filepath = resolve_file(request.data_ref)
-    style_filepath = resolve_file(request.style_ref)
-
-    if int(request.duration) > 300:
-        raise HTTPException(status_code=400, detail="Sonification too long, maximum length = 5 minutes.")
-
-    try:
-        
-        soni, alt_az = sonify(data_filepath, style_filepath, request.category, request.duration, request.system, request.observer)
-
-        session_id = session_id_var.get()
-
-        if not session_id:
-            raise HTTPException(status_code=400, detail="No session cookie found")
-        
-        category = FORMATTED_FILENAMES[request.category]
-        ext = '.wav'
-        filename = f'{request.data_name} {category}{ext}'
-        filepath = TMP_DIR / session_id / filename
-        soni.save(filepath, master_volume=MASTER_VOL)
-
-        file_ref = f'session:{filename}'
-
-        return {'file_ref': file_ref, 'alt_az': alt_az}
+def generate_sonification(request: SonificationRequest, connection: Request):
     
-    except HTTPException:
-        raise
-    except Exception as e:
-        LOG.error("Error generating sonification:\n" + traceback.format_exc())
-        raise HTTPException(
-            status_code=500,
-            detail=f"{type(e).__name__}: {str(e)}"
-        )
+    session_id = session_id_var.get()
+    
+    if not session_id:
+        raise HTTPException(status_code=400, detail="No session cookie found")
+    
+    session_dir = TMP_DIR / session_id
+    
+    if request.duration > 60:
+        raise HTTPException(status_code=400, detail="Sonification too long, maximum length is 1 minute.")
+    
+    # Check if we are sonifying star data (we use this to label the mapping table)
+    is_stars = request.soni_type in ['constellations', 'night_sky']
+    
+    # Initialise AudioFigure
+    fig = AudioFigure(system=request.system)
+    
+    for i, layer in enumerate(request.layers, start=1):
+        
+        # Resolve data and style file names to actual paths in backend
+        data_filepath = resolve_file(layer.data_ref)
+        style_filepath = resolve_file(layer.style_ref)
+        
+        try:
+            
+            # First, replace base sound name with filepath to the sound
+            style_dict = write_sound_to_style(style_filepath, write_to_yml=False)
+            
+            # Next, validate data format and convert to DataFrame
+            data_type = data_filepath.suffix.lower()
+                    
+            if data_type == '.csv':
+                    df = pd.read_csv(str(data_filepath), header=0)
+            else:
+                    raise ValueError(f'{data_type} file type not suitable for sonification, please use .csv.')
+                
+            # Determine whether it is safe to downsample the data
+            if is_time_series(df, style_dict):
+                 style_dict['max_notes_per_sec'] = style_dict.get('max_notes_per_sec') or 10
+            
+            # Overwrite any time mappings if using a custom star order for constellations
+            if request.soni_type == 'constellations' and 'custom_order' in df.columns:
+                for m in style_dict['map']:
+                    if m['output'] == 'time':
+                        m['input'] = 'custom_order'
+                        m['function'] = None # Remove any previous invert functions
+                        break
+                        
+            # Build dict with keyword arguments for sonification function
+            kwargs = {
+                'duration': request.duration,
+                'angle_unit': 'degrees' # use degrees as standard for azimuth/polar
+            }
+            
+            # Handle case that 'Place on Dome' feature is used
+            if request.observer:
+                position_info = handle_observer(request.observer)
+                
+                # Remove any existing spatial mappings
+                style_dict['map'] = [mapping for mapping in style_dict['map'] 
+                                        if mapping['output'] not in ['azimuth', 'polar', 'pan']]
+                
+                # Add fixed values to kwargs
+                if request.system == 'stereo':
+                    # Use pan
+                    kwargs['fix_pan'] = position_info['STRAUSS_inputs']['pan']
+                elif request.system in ['5.1', '7.1']:
+                    # Use Azimuth and Polar
+                    for param in ['azimuth', 'polar']:
+                        kwargs[f'fix_{param}'] = position_info['STRAUSS_inputs'][param]
+                else:
+                    raise ValueError("Place on Dome feature not available for mono audio")
+                
+                # Get altitude and azimuth values in degrees to send to the frontend to display    
+                alt_az = [position_info['display_values'][value] for value in ['altitude', 'azimuth']]
+            else:
+                alt_az = None
 
+            # Add identifier column for mapping table if necessary
+            if request.soni_type == 'data_composer' and layer.id_column:
+                source_names = df[layer.id_column].to_list()
+            elif is_stars:
+                source_names = df['display_name'].to_list()
+            else:
+                source_names = None
+                
+            kwargs['source_names'] = source_names
+                            
+            # Add style to kwargs
+            kwargs['style'] = str(write_YAML_file(style_dict))
+            
+            # Add layer to the AudioFigure and sonify
+            soni = fig.sonify(df, **kwargs)
+            
+            if layer.volume != 1:
+                # Set initial volume if not 1 (default)
+                fig.set_level(name=f'sonification_{i}', level=layer.volume)
+            
+            # Get the mapping table(s)
+            source_name = 'source_0' if style_dict['sources'].lower() == 'objects' else None
+            table: pd.DataFrame = fig.get_table(name=f'sonification_{i}', source=source_name)
+            
+            if is_stars:
+                table.rename(columns={'Source': 'Star Name'}, inplace=True)
+                # Add Hipparcos IDs
+                table['HIP'] = table['Star Name'].map(
+                    df.set_index('display_name')['hip']
+                )
+                
+                # Move the column next to display name
+                cols = list(table.columns)
+                cols.remove(('HIP', ''))
+                cols.insert(cols.index(('Star Name', '')) + 1, ('HIP', ''))
+                table = table[cols]
+                
+            if request.observer:
+                fixed_table = fig.get_fixed_table(name=f'sonification_{i}', source=source_name)
+                # Add each fixed parameter as a column in main mapping table
+                for _, row in fixed_table.iterrows():
+                    parameter = row['parameter']
+                    value = row['value']
+                    unit = row['unit']
+                    unit_header = f'[{unit}]' if unit else ''
+                    table[(parameter, unit_header)] = value
+            
+            # Save mapping table to CSV
+            table_path = session_dir / f'mapping_table_{i}.csv'
+            table.to_csv(table_path, index=False)
+            
+            n_layers = len(request.layers)
+            
+            if n_layers > 1:
+                # Save individual layers so users can download them if desired
+                soni.render(progress=False)
+                layer_name = f'layer_{i}.wav'
+                layer_path = session_dir / layer_name
+                soni.save(layer_path)
+            
+        except HTTPException:
+            raise
+        
+        except Exception as e:
+            LOG.error("Error generating sonification:\n" + traceback.format_exc())
+            raise HTTPException(
+                status_code=500,
+                detail="Error generating sonification. If error persists, please try with different Style settings."
+            )
+    
+    filename = 'audio_figure.wav'
+    filepath = session_dir / filename
+    
+    # Set master volume to maximum of layer volumes
+    master_volume = max([layer.volume for layer in request.layers])
+    fig.save(filepath, master_volume=master_volume)
+    
+    log_event(session_id=session_id, ip=connection.client.host, event='sonification_generated', sonification_type=request.soni_type)
+    cleanup_old_layers(session_id, n_layers)
+
+    file_ref = f'session:{filename}'
+
+    return {'file_ref': file_ref, 'alt_az': alt_az}
+    
+    
 @router.post('/generate-spectrogram/')
 def generate_spectrogram(request: DataRequest):
 
@@ -133,13 +264,31 @@ def generate_spectrogram(request: DataRequest):
 
         # Normalise to float
         data = data.astype(np.float32) / np.iinfo(np.int32).max
+        
+        target_sr = 22050
+
+        # Downsample
+        if sr != target_sr:
+            
+            gcd = np.gcd(sr, target_sr)
+            up = target_sr // gcd
+            down = sr // gcd
+
+            data = resample_poly(data, up, down)
+            sr = target_sr
+            
+        freq_max = sr // 2
+        
+        duration = len(data) / sr
+        nperseg = 2048 if duration < 30 else 1024
+        noverlap = nperseg // 2
 
         freqs, times, Sxx = spectrogram(
             data,
             fs=sr,
             window='hann',
-            nperseg=2048,
-            noverlap=1024,
+            nperseg=nperseg,
+            noverlap=noverlap,
             scaling='spectrum'
         )
 
@@ -181,22 +330,185 @@ def generate_spectrogram(request: DataRequest):
     return {'image': img_base64}
 
 @router.get('/audio/{file_ref}')
-def get_audio(file_ref: str):
+def get_audio(
+    connection: Request, 
+    background_tasks: BackgroundTasks, 
+    file_ref: str, 
+    name: str, 
+    audio_format: str = 'wav', 
+    volume: float = 1,
+    download: bool = False
+    ):
+    
+    audio_format = audio_format.lower()
+    
+    if audio_format not in {"wav", "mp3"}:
+        raise HTTPException(
+            status_code=400,
+            detail="Audio format must be 'wav' or 'mp3'"
+        )
+    
+    if not 0 <= volume <= 1:
+        raise HTTPException(status_code=400, detail="Volume must be between 0 and 1")
 
-    filepath = resolve_file(file_ref)
-    file_name = file_ref.split(':')[-1]
-    ext = filepath.suffix.lstrip('.')
+    wav_path = str(resolve_file(file_ref))
 
-    return FileResponse(path=filepath, 
-                        filename=file_name,
-                        media_type=f"audio/{ext}")
+    # Original file can be returned directly when volume is unchanged
+    if volume == 1:
+        file_path = wav_path
 
+    else:
+        # Create temporary volume-adjusted WAV
+        temp_file = tempfile.NamedTemporaryFile(
+            suffix=".wav",
+            delete=False,
+        )
+        temp_file.close()
 
-@router.get("/download")
-def download_file(file_ref: str):
+        volume_path = temp_file.name
+        apply_volume(wav_path, volume, volume_path)
+        
+        # Delete temporary audio file once it's served
+        background_tasks.add_task(Path(volume_path).unlink, missing_ok=True)
+        file_path = volume_path
+    
+    # Convert to MP3 if requested        
+    if audio_format == "mp3":
+        mp3_path = convert_to_mp3(file_path)
+        background_tasks.add_task(Path(mp3_path).unlink, missing_ok=True) # Delete temp mp3 after serving
+        file_path = mp3_path
+    
+    # Log event in analytics if this is a download
+    if download:
+        log_event(session_id=session_id_var.get(), ip=connection.client.host, event='audio_download')
+
+    return FileResponse(path=file_path, 
+                        filename=f'{name}.{audio_format}',
+                        media_type="audio/mpeg" if audio_format == "mp3" else "audio/wav")
+    
+@router.post('/mix-layer-volumes/')
+def mix_layer_volumes(request: VolumeRequest):
+    
+    if all(vol == 1 for vol in request.volumes):
+        # return original master if volumes all reset to 1
+        return {'file_ref': 'session:audio_figure.wav'}
+    
+    is_single_layer = len(request.volumes) == 1
+    
+    session_id = session_id_var.get()
+    session_dir = TMP_DIR / session_id
+    audio_figure_path = session_dir / 'audio_figure.wav'
+    
+    audio_figure = AudioSegment.from_wav(audio_figure_path)
+    
+    # Create blank audio segment with same attributes as audio figure
+    master = AudioSegment.silent(duration=len(audio_figure), frame_rate=audio_figure.frame_rate)
+    
+    for i, vol in enumerate(request.volumes, start=1):
+        
+        if vol == 0:
+            # Don't add silent layers
+            continue
+        
+        layer_name = "audio_figure.wav" if is_single_layer else f"layer_{i}.wav"
+        layer_path = session_dir / layer_name
+        layer_audio = AudioSegment.from_wav(layer_path)
+        
+        gain_db = 20 * math.log10(vol)
+        headroom = 5.0 if not is_single_layer else 0.0
+        adjusted = layer_audio + gain_db -headroom # Add 5db headroom to avoid clipping
+        
+        master = master.overlay(adjusted)
+
+    master_path = session_dir / "audio_figure_mixed.wav"
+    master.export(master_path, format='wav')
+    
+    return {'file_ref': 'session:audio_figure_mixed.wav'}
+    
+def apply_volume(wav_path: str, volume: float, output_path: str) -> None:
+    if not 0 <= volume <= 1:
+        raise ValueError("Volume must be between 0 and 1")
+
+    audio = AudioSegment.from_wav(wav_path)
+
+    if volume == 0:
+        audio = AudioSegment.silent(duration=len(audio), frame_rate=audio.frame_rate)
+    else:
+        gain_db = 20 * math.log10(volume)
+        audio = audio + gain_db
+
+    audio.export(output_path, format="wav")
+
+def convert_to_mp3(wav_file: str) -> str:
+    """
+    Convert a WAV file to an MP3.
+
+    Args:
+        wav_file: Path to the WAV file.
+
+    Returns:
+        Path to the temporary MP3 file.
+
+    Raises:
+        FileNotFoundError: If the WAV file does not exist.
+        ValueError: If the input file is not a WAV.
+        RuntimeError: If FFmpeg cannot be found.
+    """
+    wav_path = Path(wav_file)
+
+    if not wav_path.exists():
+        raise FileNotFoundError(f"WAV file not found: {wav_path}")
+
+    if wav_path.suffix.lower() != ".wav":
+        raise ValueError(f"Expected a .wav file, got {wav_path.suffix}")
+
+    # Find FFmpeg
+    system_ffmpeg = shutil.which("ffmpeg")
+
+    if system_ffmpeg:
+        # Production/Linux server
+        AudioSegment.converter = system_ffmpeg
+    else:
+        # Development/Windows
+        local_ffmpeg = r"C:\Users\ngc133\ffmpeg\bin\ffmpeg.exe"
+
+        if not Path(local_ffmpeg).exists():
+            raise RuntimeError(
+                "FFmpeg is not installed or could not be found in this environment."
+            )
+
+        AudioSegment.converter = local_ffmpeg
+
+    temp_file = tempfile.NamedTemporaryFile(
+                suffix=".mp3",
+                delete=False,
+            )
+    temp_file.close()
+
+    mp3_path = temp_file.name
+    
+    audio = AudioSegment.from_wav(wav_path)
+
+    try:
+        audio.export(
+            mp3_path,
+            format="mp3",
+            bitrate="320k"
+        )
+    except Exception:
+        # Remove any partially-created/corrupt MP3
+        if mp3_path.exists():
+            mp3_path.unlink()
+        raise
+
+    return str(mp3_path)
+    
+
+@router.get("/download/{file_ref}")
+def download_file(file_ref: str, name: str | None = None):
 
     file_path = str(resolve_file(file_ref))
-    file_name = file_ref.split(':')[-1]
+    file_name = name or file_ref.split(':')[-1]
  
     response = FileResponse(
         path=file_path,
@@ -208,75 +520,17 @@ def download_file(file_ref: str):
 
     return response
 
-def ensure_two_columns(ext: str, contents: bytes):
-    
-    if ext == ".csv":
-        df = pd.read_csv(BytesIO(contents))
-        df = df.dropna(axis=1, how='all') # Remove empty columns
-
-    elif ext == ".fits":
-        with fits.open(BytesIO(contents)) as hdul:
-            # find first table HDU
-            table_hdu = next(
-                (hdu for hdu in hdul if isinstance(hdu, (fits.BinTableHDU, fits.TableHDU))),
-                None
-            )
-
-            if table_hdu is None:
-                raise HTTPException(400, "FITS file contains no table")
-
-            table = Table(table_hdu.data)
-            
-            # convert to dataframe
-            df = table.to_pandas()
-            
-            df.columns = [col.lower() for col in df.columns]
-
-            # find time + flux columns
-            time_col = next((col for col in df.columns if "time" in col), None)
-            flux_col = next((col for col in df.columns if "flux" in col), None)
-
-            if time_col is None or flux_col is None:
-                raise HTTPException(400, "FITS file must contain time and flux columns")
-
-            # select only those columns
-            df = df[[time_col, flux_col]]
-            
-            df = df.rename(columns={
-                time_col: "Time (days)",
-                flux_col: "Flux (electrons per second)"
-            })
-
-
-    else:
-        raise HTTPException(415, "Unsupported file format")
-    
-    # Flag to send to the frontend to inform user that data was sliced
-    reduced = False
-
-    if df.shape[1] < 2:
-        raise HTTPException(400, "Dataset must contain at least two columns")
-    elif df.shape[1] > 2:
-        # reduce to first two columns if needed
-        df = df.iloc[:, :2]
-        reduced = True
-        
-    # If there are no meaningful headers, assign default names
-    if all(is_number(col) for col in df.columns):
-        df.columns = ["Column 1", "Column 2"]
-
-    return df, reduced
-
 
 @router.post('/upload-data/')
-async def uploadData(file: UploadFile, request: Request):
+async def upload_data(request: Request, file: UploadFile, soni_type: str | None = Form(None)):
     """
     Function for the user to upload their own data to the system, which is then written
     to the tmp directory. The maximum file size is 10mb, as this is a limit set in nginx.
 
-    - **file**: The user-uploaded data file.
+    - **upload**: The user-uploaded data file and (optionally) the sonification type.
     - Returns: The filepath of the saved data file.
     """
+
 
     # Client details for logging
     ip = request.client.host
@@ -303,7 +557,7 @@ async def uploadData(file: UploadFile, request: Request):
 
     ext = suffixes[0].lower()
 
-    if ext not in ACCEPTED_UPLOAD_FORMATS:
+    if ext != '.csv':
         LOG.warning(
             "Upload rejected | ext=%s | reason=rejected_extension | session=%s | ip=%s",
             ext,
@@ -312,7 +566,7 @@ async def uploadData(file: UploadFile, request: Request):
         )
         raise HTTPException(
             status_code=415,
-            detail='Uploaded data must be in .csv or .fits format'
+            detail='Uploaded data must be in .csv format'
         )
 
     MAX_SIZE = 10 * 1024 * 1024
@@ -351,85 +605,151 @@ async def uploadData(file: UploadFile, request: Request):
             )
             raise HTTPException(415, "Invalid CSV file")
         
-
-    # Check that the uploaded data is only two columns (x,y) and reduce if necessary
-    df, reduced = ensure_two_columns(ext, contents)
-
-    # Create random ID to store file under
-    new_name = f"{uuid.uuid4()}.csv"
-
-    # Ensure session directory exists
-    session_dir = os.path.join(TMP_DIR, session_id)
-    os.makedirs(session_dir, exist_ok=True)
     
-    # Check session quota
-    current_usage = get_session_size(session_dir)
-    if current_usage + len(contents) > SESSION_QUOTA_BYTES:
-        LOG.warning(
-            "Upload rejected | reason=quota_exceeded | usage=%d | file_size=%d | session=%s | ip=%s",
-            current_usage,
+    if soni_type:
+        file_ref, import_info = validate_import(contents, soni_type, Path(file.filename).stem)
+    else:
+        
+        # Ensure session directory exists
+        session_dir = os.path.join(TMP_DIR, session_id)
+        os.makedirs(session_dir, exist_ok=True)
+            
+        # Ensure uploads directory exists
+        uploads_dir = os.path.join(session_dir, 'uploads')
+        os.makedirs(uploads_dir, exist_ok=True)
+        
+        # Check session's upload quota
+        current_usage = get_uploads_dir_size(uploads_dir)
+        if current_usage + len(contents) > UPLOAD_QUOTA_BYTES:
+            LOG.warning(
+                "Upload rejected | reason=quota_exceeded | usage=%d | file_size=%d | session=%s | ip=%s",
+                current_usage,
+                len(contents),
+                session_id,
+                ip
+            )
+            raise HTTPException(429, f"Session upload quota of {UPLOAD_QUOTA_MB}MB exceeded")
+
+        # Create random ID to store file under
+        new_name = f"{uuid.uuid4()}.csv"
+        filepath = os.path.join(uploads_dir, new_name)
+        
+        # Write to new csv file
+        with open(filepath, "wb") as f:
+            f.write(contents)
+
+        LOG.info(
+            "Upload success | original=%s | stored=%s | size=%d | session=%s | ip=%s",
+            file.filename,
+            new_name,
             len(contents),
             session_id,
             ip
         )
-        raise HTTPException(429, f"Session storage quota of {SESSION_QUOTA_MB}MB exceeded")
 
-    filepath = os.path.join(session_dir, new_name)
+        file_ref = f"session:uploads:{new_name}"
+        import_info = None
 
-    # Write to new csv file
-    df.to_csv(filepath, index=False)
+    return {"file_ref": file_ref, "import_info": import_info}
 
-    LOG.info(
-        "Upload success | original=%s | stored=%s | size=%d | session=%s | ip=%s",
-        file.filename,
-        new_name,
-        len(contents),
-        session_id,
-        ip
-    )
 
-    file_ref = f"session:{new_name}"
+def validate_import(file_contents: bytes, soni_type: str, filename: str):
+    
+    formatted_types = {
+        'light_curves': 'light curve',
+        'constellations': 'constellation',
+        'night_sky': 'night sky'
+    }
+    
+    if soni_type not in formatted_types.keys():
+        raise HTTPException(status_code=400, detail=f"Invalid soni_type: {soni_type}")
+    
+    df = pd.read_csv(BytesIO(file_contents))
+    
+    expected_cols = INPUTS[soni_type].keys()
+    
+    # Check that the basic columns for this soni type are a subset of the imported columns
+    if not expected_cols <= set(df.columns):
+        raise HTTPException(status_code=400, detail=f"Imported data appears invalid - are you sure this is a {formatted_types[soni_type]} downloaded from the Suite?")
 
-    return {"file_ref": file_ref, "reduced": reduced}
+    import_info= {
+        'data_name': filename,
+    }
 
+    if soni_type == 'night_sky':
+        import_info['max_magnitude'] = df['magnitude'].max()
+    
+    elif soni_type == 'constellations':
+        import_info['stick_figure'] = bool(df['stick_figure'].iloc[0])
+        import_info['star_count'] = len(df)
+
+        # Get custom order if there is one in imported data
+        import_info['custom_order'] = (
+            df.sort_values('custom_order')['hip'].tolist()
+            if 'custom_order' in df.columns
+            else None
+        )
+        
+    session_id = session_id_var.get()
+    file_name = f'{soni_type}.csv'
+    file_path = TMP_DIR / session_id / file_name
+    df.to_csv(file_path, index=False)
+    
+    file_ref = f'session:{file_name}'
+    
+    return file_ref, import_info
+
+    
 
 def round_range(range: list, dp: int = 2) -> list:
     return [round(float(v), dp) for v in range]
 
 
 @router.get('/get-inputs/')
-def get_inputs(file_ref: str, soni_type: str, user_upload: bool = False ):
+def get_inputs(file_ref: str, soni_type: str):
     
     filepath = str(resolve_file(file_ref))
     
-    if filepath.endswith('.csv') and user_upload:
-        df = pd.read_csv(filepath)
+    if not filepath.endswith('.csv'):
+        raise HTTPException(status_code=400, detail='File is not CSV, cannot read inputs')
+    
+    if soni_type == 'data_composer':
+        df = pd.read_csv(filepath, header=0)
         
-        # If all column names are numeric, the data likely has no headers
-        if all(str(col).replace('.', '').replace('-', '').isnumeric() for col in df.columns):
-            df = pd.read_csv(filepath, header=None)
-            df.columns = [f"Column {i + 1}" for i in range(len(df.columns))]
+        # Find which columns contain numeric data
+        numeric_cols = df.select_dtypes(include="number").columns
             
         inputs = [
             {
                 'name': col, 
                 'desc': '',
-                'key': col
+                'key': col,
+                'numeric': col in numeric_cols
             }
             for col in df.columns
         ]
 
-    else:
- 
+    else:   
         inputs = [
             {
                 'name': INPUTS[soni_type][col]['name'], 
                 'desc': INPUTS[soni_type][col]['desc'],
-                'key': col
+                'key': col,
+                'numeric': True
             }
             for col in INPUTS[soni_type]
         ]
-    
+        
+        # Add custom order column if user has chosen a custom constellation order
+        if soni_type == 'constellations' and 'custom_order' in pd.read_csv(filepath).columns:
+            inputs.append(
+                    {
+                    'name': 'Custom Order',
+                    'desc': 'Your chosen star order - map this to Time',
+                    'key': 'custom_order',
+                    'numeric': True
+                    }
+            )
 
     return inputs
 
@@ -440,15 +760,14 @@ def get_outputs():
         for k, v in OUTPUTS.items()
     ]
         
-    
 
-@router.get('/suggested-data/{category}/')
-def get_suggested(category: str):
+@router.get('/suggested-data/{soni_type}/')
+def get_suggested(soni_type: str):
 
-    data_dir = SUGGESTED_DATA_DIR / category
+    data_dir = SUGGESTED_DATA_DIR / soni_type
     
     if not data_dir.exists():
-        raise HTTPException(status_code=404, detail=f'Suggested data directory for {category} not found')
+        raise HTTPException(status_code=404, detail=f'Suggested data directory for {soni_type} not found')
     
     data_list = []
 
@@ -460,33 +779,34 @@ def get_suggested(category: str):
             desc = data.get('description')
             ra = data.get('ra', None)
             dec = data.get('dec', None)
+            category = data.get('category', None)
         except Exception as e:
             print(f'Failed to read or parse {file}: {e}')
             continue
 
         filenames = {
-            'light_curves': str(file.stem) + '.fits',
+            'light_curves': str(file.stem) + '.csv',
             'constellations': 'hyg.csv'
         }
 
-        file_ref = f'suggested_data:{category}:{filenames[category]}'
+        file_ref = f'suggested_data:{soni_type}:{filenames[soni_type]}'
 
         data = {'name': name,
                 'description': desc,
-                'file_ref': file_ref}
-        
-        if ra is not None and dec is not None:
-            data['ra'] = ra
-            data['dec'] = dec
+                'ra': ra,
+                'dec': dec,
+                'file_ref': file_ref,
+                'category': category
+                }
 
         data_list.append(data)
         
     return data_list
 
-@router.get('/styles/{category}')
-def get_styles(category: str):
+@router.get('/styles/{soni_type}')
+def get_styles(soni_type: str):
 
-    styles_dir = STYLE_FILES_DIR / category
+    styles_dir = STYLE_FILES_DIR / soni_type
     if not styles_dir.exists():
         raise HTTPException(status_code=404, detail="Style directory not found")
     
@@ -502,7 +822,7 @@ def get_styles(category: str):
             print(f"Failed to read or parse {file}: {e}")
             continue
 
-        file_ref = f'style_files:{category}:{file.name}'
+        file_ref = f'style_files:{soni_type}:{file.name}'
 
         style = {'name': style_name, 'description': style_description, 'file_ref': file_ref}
 
@@ -510,52 +830,92 @@ def get_styles(category: str):
 
     return styles
 
+def get_sounds():
+      
+    local_sounds = []
+    
+    for f in SYNTHS_DIR.iterdir():
+        if f.is_file():
+            composable = f.stem != 'White Noise'
+            data_modes = ['continuous', 'discrete']
+            sound = SoundInfo(name=f.stem, composable=composable, data_modes=data_modes)
+            local_sounds.append(sound)
+            
+    # List of sound names that are only suitable for Events (discrete) sonifications
+    SHORT_SAMPLES = ['Glockenspiel', 'Mallets', 'Harp']
+
+    for f in SAMPLES_DIR.iterdir():
+        if f.is_dir():
+            name = f.stem
+    
+            files = [file for file in f.iterdir() if file.is_file()]
+
+            # Composable if:
+            # 1) The directory contains a .sf2 file
+            # 2) OR the directory contains multiple files
+            composable = (
+                any(file.suffix == ".sf2" for file in files)
+                or len(files) > 1
+            )
+
+            # We are essentially hardcoding which sounds are suitable for Events vs Objects,
+            # so if more sounds are added in the future, this categorisation may need to change.
+            data_modes = ['discrete'] if name in SHORT_SAMPLES else ['continuous']
+          
+            sound = SoundInfo(name=name, composable=composable, data_modes=data_modes)
+            local_sounds.append(sound)
+      
+    return local_sounds
+
 @router.get('/sound_info/')
 def get_sound_info():
-    return all_sounds()
+    return get_sounds()
 
-@router.post('/preview-style-settings/{category}')
-def preview_style_settings(request: DataRequest, category: str):
+@router.post('/preview-style-settings/')
+def preview_style_settings(request: DataRequest):
 
+    # Resolve style ref to path and swap sound name for full filepath
     style = resolve_file(request.file_ref)
+    style_dict = write_sound_to_style(style, write_to_yml=False)
     
-    duration = 5
-
-    if category == 'light_curves':
-        
-        n_samples = 100
-        cycles = 2
-
-        x = np.linspace(0, duration, n_samples, endpoint=False)
-        freq = cycles / duration
-
-        # Generate sine wave for light curve-like data
-        y = np.sin(2 * np.pi * freq * x)
-        
-        data = (x, y)
-    else:
-        data = SUGGESTED_DATA_DIR / category / 'preview.csv'
+    # Generate synthetic data for previews
+    N = 100 if style_dict["sources"] == "objects" else 50
     
+    args = []
+    
+    for mapping in style_dict["map"]:
+        output = mapping["output"]
+
+        if output in ["time", "time_evo"]:
+            # Use linear function for time
+            args.append(np.linspace(0, 1, N))
+        else:
+            # Sine wave for all other parameters 
+            x = np.linspace(0, np.pi, N) 
+            args.append(np.sin(x))
+    
+    style_file = str(write_YAML_file(style_dict))
 
     try:
-    
-        soni, alt_az = sonify(data, style, category, length=5,  system='mono')
+        fig = AudioFigure()
+        fig.sonify(*args, style=style_file, duration=5)
 
         id = str(uuid.uuid4().hex)
         ext = '.wav'
-        filename = f'{category}_{id}{ext}'
+        filename = f'preview_{id}{ext}'
         session_id = session_id_var.get()
         filepath = os.path.join(TMP_DIR, session_id, filename)
-        soni.save(filepath, master_volume=MASTER_VOL)
+        fig.save(filepath)
 
         file_ref = f'session:{filename}'
 
         return {'file_ref': file_ref}
-    except Exception as e:
-        raise HTTPException(status_code=404, detail=str(e))
+    except Exception:
+        traceback.print_exc()
+        raise
     
-@router.post('/save-sound-settings/')
-def save_sound_settings(settings: CustomStyleSettings):
+@router.post('/save-style-settings/')
+def save_style_settings(settings: CustomStyleSettings):
     """
     Save sound settings for the sonification.
 
@@ -563,92 +923,87 @@ def save_sound_settings(settings: CustomStyleSettings):
     - Returns: A filename of the saved settings.
     """
     # Save settings to a yaml file and return the filename
-    style = format_settings(settings)
+    style = format_style(settings)
+    filepath = write_YAML_file(style)
 
-    yaml_text = yaml.dump(style, default_flow_style=False)
-    filename = f'style_{uuid.uuid4()}.yaml'
-    session_id = session_id_var.get()
-    filepath = os.path.join(TMP_DIR, session_id, filename)
-    f = open(filepath, "x")
-    f.write(yaml_text)
-    f.close()
-
-    file_ref = f'session:{filename}'
+    file_ref = f'session:{filepath.name}'
 
     # Return the file reference
     return {'file_ref': file_ref}
 
-def format_settings(settings: CustomStyleSettings):
+def format_style(settings: CustomStyleSettings):
+
+    sources = 'objects' if settings.dataMode == 'continuous' else 'events'
     
-    # Remove null entries
-    params = [{k: v for k, v in m.items() if v is not None} for m in settings.map]
+    for m in settings.map:
         
-    style = {
-        "sound": settings.sound,
-        "parameters": params
+        # If using custom data, swap 'column 1' etc for 0-indexed column index (e.g. 'column 1' -> 0)
+        if re.fullmatch(r"column \d+", m["input"]):
+            m["input"] = int(m["input"].split()[-1]) - 1
+            
+        if m['output'] == 'time':
+            if sources == 'objects':
+                # Swap time for time_evo if using Objects
+                m['output'] = 'time_evo'
+            else:
+                # Add extra time for Events to play out
+                m['input_range'] = ['0%', '110%']
+                
+        elif m['output'] == 'pitch':
+            # Swap pitch for pitch_shift if Objects, or Events with no notes given
+            if sources == 'objects' or not settings.notes:
+                m['output'] = 'pitch_shift'
+                lims = m['output_range'] or [0, 1]
+                m['output_range'] = [x*24 for x in lims] # Rescale 0-1 to 0-24 semitones (STRAUSS range for pitch_shift)        
+        
+    # Set up Generator dictionary
+    gen_type, sound_key = (
+        ("synthesizer", "preset")
+        if is_synth(settings.sound)
+        else ("sampler", "sample")
+    )
+        
+    generator = {
+        'type': gen_type,
+        sound_key: settings.sound
     }
 
-    if settings.chordMode:
-        style['harmony'] = f"{settings.rootNote}{settings.quality}"
-    else:
-        if settings.scale != 'None':
-            style['harmony'] = f"{settings.rootNote} {settings.scale}"
+    mods = GENERATOR_MODS.get(settings.sound)
+    if mods:
+        generator["mods"] = mods
+    
+    
+    # Build final style dict
+    style = {
+        "name": "Custom",
+        "sources": sources,
+        "generator": generator,
+        "map": settings.map,
+        "notes": settings.notes,
+        "metadata": settings.metadata.model_dump()
+    }
+    
+    # Add additional fields for Events
+    if sources == 'events':
+        style['pitch_binning'] = 'uniform'
     
     return style
 
-
-async def download_online_asset(target_name: str):
-
-    target_asset = None
-
-    for asset in asset_cache:
-        asset_name = asset.get('name', '')
-        asset_name = format_name(asset_name)
-
-        if asset_name.lower() == target_name.lower():
-            target_asset = asset
-            break
-
-    if not target_asset:
-        return {"status": "error", "message": "Asset not found in online cache."}
+@router.post("/convert-style-to-settings/")
+def convert_style_to_settings(request: DataRequest):
     
+    style_path = str(resolve_file(request.file_ref))
+    style: dict = read_YAML_file(style_path)
     
-    file_name = target_asset['name']
-    local_path = Path(SAMPLES_DIR) / target_name
-
-    # Skip download if file exists
-    if local_path.exists():
-        return {"status": "skipped", "message": "File already exists locally."}
+    settings = {
+        'data_mode': 'continuous' if style['sources'] == 'objects' else 'discrete',
+        'sound_name': style['generator'].get('preset') or style['generator'].get('sample'),
+    }
     
-    # Define local path
-    session_id = session_id_var.get()
-    write_path = TMP_DIR / session_id / file_name
-    
-    # Download the file
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(target_asset["url"], follow_redirects=True)
-        resp.raise_for_status()
-        async with aiofiles.open(write_path, "wb") as f:
-            await f.write(resp.content)
-    
-    if file_name.endswith('.zip'):
-        with zipfile.ZipFile(write_path, 'r') as zip_ref:
-            zip_ref.extractall(SAMPLES_DIR)
-
-    # Delete the zip file after extraction
-    write_path.unlink(missing_ok=True)
-
-    return {"status": "success", "message": f"Downloaded and extracted {file_name}"}
-
-
-
-@router.post('/ensure-sound-available/')
-async def ensure_sound_available(request: SoundRequest):
-
-    if request.sound_name not in [s.name for s in local_sounds()]:
-        await download_online_asset(request.sound_name)
-    else: print('Sound already exists in local dir')
-
+    for k in ['map', 'notes', 'metadata']:
+        settings[k] = style[k]
+        
+    return settings
 
 @router.post("/upload-style/")
 async def upload_style(file: UploadFile = File(...), request: Request = None):
@@ -711,6 +1066,8 @@ async def upload_style(file: UploadFile = File(...), request: Request = None):
 
     try:
         parsed_yaml = yaml.safe_load(contents)
+        style_name = parsed_yaml.get('name', 'Custom')
+        style_description = parsed_yaml.get('description', "")
     except yaml.YAMLError as e:
         LOG.warning(
             "Style upload rejected | reason=invalid_yaml | session=%s | ip=%s",
@@ -721,18 +1078,22 @@ async def upload_style(file: UploadFile = File(...), request: Request = None):
     # Ensure session directory exists
     session_dir = os.path.join(TMP_DIR, session_id)
     os.makedirs(session_dir, exist_ok=True)
+    
+    # Ensure uploads directory exists
+    uploads_dir = os.path.join(session_dir, 'uploads')
+    os.makedirs(uploads_dir, exist_ok=True)
 
     # Check session quota
-    current_usage = get_session_size(session_dir)
-    if current_usage + len(contents) > SESSION_QUOTA_BYTES:
+    current_usage = get_uploads_dir_size(uploads_dir)
+    if current_usage + len(contents) > UPLOAD_QUOTA_BYTES:
         LOG.warning(
             "Style upload rejected | reason=quota_exceeded | usage=%d | file_size=%d | session=%s | ip=%s",
             current_usage, len(contents), session_id, ip
         )
-        raise HTTPException(429, f"Session storage quota of {SESSION_QUOTA_MB}MB exceeded")
+        raise HTTPException(429, f"Session upload quota of {UPLOAD_QUOTA_MB}MB exceeded")
 
     new_name = f"{uuid.uuid4()}{ext}"
-    filepath = os.path.join(session_dir, new_name)
+    filepath = os.path.join(uploads_dir, new_name)
 
     with open(filepath, 'wb') as f:
         f.write(contents)
@@ -746,8 +1107,6 @@ async def upload_style(file: UploadFile = File(...), request: Request = None):
         ip
     )
 
-    file_ref = f"session:{new_name}"
+    file_ref = f"session:uploads:{new_name}"
     
-    return {"file_ref": file_ref, "parsed": parsed_yaml}
-
-
+    return {"file_ref": file_ref, "style_name": style_name, "style_description": style_description}

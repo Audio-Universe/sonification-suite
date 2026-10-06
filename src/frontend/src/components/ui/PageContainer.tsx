@@ -1,7 +1,22 @@
-import { Box, Flex, Text, Link, Button, Icon, HStack, VStack,  Dialog, CloseButton } from "@chakra-ui/react";
-import { useNavigate } from "react-router-dom";
-import { CircleQuestionMark, Info } from "lucide-react";
+import {
+  Box,
+  Flex,
+  Text,
+  Link,
+  Icon,
+  IconButton,
+  HStack,
+  VStack,
+  Dialog,
+  CloseButton,
+  Breadcrumb,
+} from "@chakra-ui/react";
+import { useNavigate, NavLink } from "react-router-dom";
+import { CircleQuestionMark, Info, Menu } from "lucide-react";
 import { useState } from "react";
+import { NavDrawer } from "./NavDrawer";
+import Breadcrumbs from "./Breadcrumbs";
+import { LuChevronRight, LuLightbulb } from "react-icons/lu";
 
 export default function PageContainer({
   children,
@@ -10,84 +25,146 @@ export default function PageContainer({
   children: React.ReactNode;
   nav?: boolean;
 }) {
-  const navigate = useNavigate();
   const [licenseOpen, setLicenseOpen] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
 
   return (
     <Box maxW="1200px" mx="auto" px={6} py={4} width="100%">
+      {/* Skip nav bar for screen reader/keyboard users*/}
+      <Link
+        href="#"
+        position="absolute"
+        width="1px"
+        height="1px"
+        padding={0}
+        margin="-1px"
+        overflow="hidden"
+        clipPath="inset(50%)"
+        whiteSpace="nowrap"
+        border="0"
+        bg="teal.500"
+        color="white"
+        zIndex={9999}
+        _focus={{
+          width: "auto",
+          height: "auto",
+          padding: "8px 16px",
+          margin: 0,
+          overflow: "visible",
+          clipPath: "none",
+          whiteSpace: "normal",
+          top: 0,
+          left: 0,
+        }}
+        onClick={(e) => {
+          e.preventDefault();
+          const el = document.getElementById("main-content");
+          if (el) {
+            el.focus();
+            el.scrollIntoView({ behavior: "smooth" });
+          }
+        }}
+      >
+        Skip to content
+      </Link>
+
       {nav && (
-        <Flex as="header" justify="space-between" align="center" mb={6}>
-          <Flex align="center" gap={2} wrap="wrap">
-            <Text
-              fontSize="lg"
-              cursor="pointer"
-              onClick={() => navigate("/")}
-              _hover={{ opacity: 0.8 }}
-              transition="opacity 0.15s ease"
-            >
-              Sonification{" "}
-              <Box as="span" color="teal.500">
-                Suite
-              </Box>
-            </Text>
+        <>
+          {/* Mobile Navigation */}
+          <Flex as="header" display={{ base: "flex", md: "none" }} mb={6}>
+            <NavDrawer />
+          </Flex>
+          {/* Desktop Navigation */}
+          <Flex
+            as="header"
+            justify="space-between"
+            align="center"
+            mb={6}
+            display={{ base: "none", md: "flex" }}
+          >
+            <Flex align="center" gap={2} wrap="wrap">
+              <NavLink to="/" aria-label="Go to landing page">
+                <Text
+                  fontSize="lg"
+                  cursor="pointer"
+                  _hover={{ opacity: 0.8 }}
+                  transition="opacity 0.15s ease"
+                >
+                  Sonification Suite
+                </Text>
+              </NavLink>
 
-            <Text opacity={0.35}>/</Text>
-            <Text
-              fontSize="lg"
-              opacity={0.6}
-              cursor="pointer"
-              onClick={() => navigate("/planetaria")}
-              _hover={{ opacity: 1 }}
-              transition="opacity 0.15s ease"
-            >
-              Planetaria
-            </Text>
-          </Flex>
-          <Flex gap={5}>
-            <Link
-              href="https://www.audiouniverse.org/sonification-suite/planetaria/about"
-              style={{ textDecoration: "none" }}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <HStack
-                opacity={0.5}
-                _hover={{ opacity: 1 }}
-                transition="opacity 0.15s ease"
-                cursor="pointer"
-                role="button"
+              <Breadcrumbs />
+            </Flex>
+            <Flex gap={5}>
+              <Link
+                href="https://sonification-suite.readthedocs.io/en/latest/about/"
+                style={{ textDecoration: "none" }}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Go to about page in new tab"
               >
-                <Icon size="md">
-                  <Info />
-                </Icon>
-                <Text fontSize="md">About</Text>
-              </HStack>
-            </Link>
-            <Link
-              href="https://www.audiouniverse.org/sonification-suite/planetaria"
-              style={{ textDecoration: "none" }}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <HStack
-                opacity={0.5}
-                _hover={{ opacity: 1 }}
-                transition="opacity 0.15s ease"
-                cursor="pointer"
-                role="button"
+                <HStack
+                  opacity={0.5}
+                  _hover={{ opacity: 1 }}
+                  transition="opacity 0.15s ease"
+                  cursor="pointer"
+                  role="link"
+                >
+                  <Icon size="md">
+                    <Info />
+                  </Icon>
+                  <Text fontSize="md">About</Text>
+                </HStack>
+              </Link>
+              <Link
+                href="https://sonification-suite.readthedocs.io/en/latest/"
+                style={{ textDecoration: "none" }}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Go to help page in new tab"
               >
-                <Icon size="md">
-                  <CircleQuestionMark />
-                </Icon>
-                <Text fontSize="md">Help</Text>
-              </HStack>
-            </Link>
+                <HStack
+                  opacity={0.5}
+                  _hover={{ opacity: 1 }}
+                  transition="opacity 0.15s ease"
+                  cursor="pointer"
+                  role="button"
+                >
+                  <Icon size="md">
+                    <CircleQuestionMark />
+                  </Icon>
+                  <Text fontSize="md">Help</Text>
+                </HStack>
+              </Link>
+              <Link
+                href="https://www.audiouniverse.org/sonification-suite/suggestions-and-example-bank"
+                style={{ textDecoration: "none" }}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Go to Audio Universe examples page in new tab"
+              >
+                <HStack
+                  opacity={0.5}
+                  _hover={{ opacity: 1 }}
+                  transition="opacity 0.15s ease"
+                  cursor="pointer"
+                  role="button"
+                >
+                  <Icon size="md">
+                    <LuLightbulb />
+                  </Icon>
+                  <Text fontSize="md">Examples</Text>
+                </HStack>
+              </Link>
+            </Flex>
           </Flex>
-        </Flex>
+        </>
       )}
-
-      {children}
-
+      {/* Main Content */}
+      <Box as="main" id="main-content" tabIndex={-1} position="relative">
+        {children}
+      </Box>
       {/* Footer */}
       <Flex
         as="footer"
@@ -102,7 +179,9 @@ export default function PageContainer({
         opacity={0.5}
       >
         <Text
+          aria-label="Open software license"
           fontSize="xs"
+          as="button"
           cursor="pointer"
           _hover={{ opacity: 1 }}
           onClick={() => setLicenseOpen(true)}
@@ -112,7 +191,8 @@ export default function PageContainer({
         <Text fontSize="xs">
           Powered by{" "}
           <Link
-            href="https://github.com/james-trayford/strauss"
+            aria-label="Go to STRAUSS documentation in new tab"
+            href="https://strauss.readthedocs.io/en/latest/"
             colorPalette="teal"
             target="_blank"
             rel="noopener noreferrer"
@@ -120,8 +200,18 @@ export default function PageContainer({
             STRAUSS
           </Link>
         </Text>
+        <Text
+          aria-label="Open feedback details."
+          fontSize="xs"
+          as="button"
+          cursor="pointer"
+          _hover={{ opacity: 1 }}
+          onClick={() => setFeedbackOpen(true)}
+        >
+          Submit feedback
+        </Text>
 
-        <Text fontSize="xs">v0.2 (Alpha)</Text>
+        <Text fontSize="xs">v1.0</Text>
       </Flex>
       <Dialog.Root
         open={licenseOpen}
@@ -160,6 +250,43 @@ export default function PageContainer({
                   fontSize="sm"
                 >
                   Read the full GNU GPL v3 license →
+                </Link>
+              </VStack>
+            </Dialog.Body>
+            <Dialog.Footer>
+              <Dialog.CloseTrigger asChild>
+                <CloseButton />
+              </Dialog.CloseTrigger>
+            </Dialog.Footer>
+          </Dialog.Content>
+        </Dialog.Positioner>
+      </Dialog.Root>
+
+      <Dialog.Root
+        open={feedbackOpen}
+        onOpenChange={(e) => setFeedbackOpen(e.open)}
+        placement="center"
+        size="lg"
+      >
+        <Dialog.Backdrop />
+        <Dialog.Positioner>
+          <Dialog.Content maxH="80vh">
+            <Dialog.Header>
+              <Dialog.Title>Submit Feedback</Dialog.Title>
+            </Dialog.Header>
+            <Dialog.Body overflowY="auto">
+              <VStack align="stretch" gap={3}>
+                <Text fontSize="sm">
+                  Have a request for a feature/improvement? Found a bug? Want to
+                  let us know how you are using the Suite? For all these
+                  enquiries and more, please contact us at
+                </Text>
+                <Link
+                  colorPalette="teal"
+                  href="mailto:contactaudiouniverse@gmail.com"
+                  style={{ textDecoration: "underline" }}
+                >
+                  contactaudiouniverse@gmail.com
                 </Link>
               </VStack>
             </Dialog.Body>

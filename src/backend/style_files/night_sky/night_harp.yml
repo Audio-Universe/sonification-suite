@@ -2,9 +2,11 @@ name: 'Night Harp'
 
 description: 'A harp plays the night sky from brightest to dimmest stars, where higher notes signify bluer/hotter stars.'
 
-sound: 'Harp'
+generator:
+  type: 'sampler'
+  sample: 'Harp'
 
-parameters:
+map:
   
   - input: 'colour'
     output: 'pitch'
@@ -12,15 +14,19 @@ parameters:
 
   - input: 'magnitude'
     output: 'volume'
-    output_range: [0.1, 1]
+    output_range: [0.05, 1]
     function: 'invert'
 
   - input: 'magnitude'
     input_range: ['0%', '120%']
     output: 'time'
 
-  - input: 'relative_az'
+  - input: 'relative_azimuth'
     output: 'azimuth'
-    output_range: [0.25, 0.75]
 
-harmony: ['F2', 'C2', 'F3', 'A3', 'E4', 'G4']
+  - input: 'zenith_angle'
+    output: 'polar'
+
+sources: 'events'
+
+notes: ['F2', 'C2', 'F3', 'A3', 'E4', 'G4']

@@ -11,31 +11,45 @@ import {
   Badge,
 } from "@chakra-ui/react";
 import { useNavigate } from "react-router-dom";
-import { LuTelescope } from "react-icons/lu";
+import { LuFilm, LuLayers3, LuLightbulb, LuTelescope } from "react-icons/lu";
 import { IconType } from "react-icons/lib";
 import PageContainer from "../ui/PageContainer";
 
-
-interface Domain {
+interface Module {
   id: string;
   label: string;
   description: string;
   href?: string;
+  external?: boolean;
   Icon: IconType;
 }
 
-const DOMAINS: Domain[] = [
+const MODULES: Module[] = [
   {
     id: "planetaria",
-    label: "for Planetaria",
+    label: "Planetaria & Astronomy",
     description:
-      "Sonify constellations, stellar light curves, and entire night skies for your planetarium shows.",
+      "Sonify constellations, stellar light curves, and entire night skies for your planetarium or astronomy communications.",
     href: "/planetaria",
     Icon: LuTelescope,
-  }
+  },
+  {
+    id: "data-composer",
+    label: "Data Composer",
+    description: "Upload your own data and compose sonifications in layers.",
+    href: "/data-composer",
+    Icon: LuLayers3,
+  },
+  {
+    id: "examples",
+    label: "Suggestions & Examples",
+    description:
+      "Explore pre-made examples, tutorials, and suggestions for using the Suite.",
+    href: "https://www.audiouniverse.org/sonification-suite/suggestions-and-example-bank",
+    external: true,
+    Icon: LuLightbulb
+  },
 ];
-
-// ─── Waveform SVG ─────────────────────────────────────────────────────────────
 
 function WaveformDecoration() {
   const points = Array.from({ length: 300 }, (_, i) => {
@@ -54,6 +68,7 @@ function WaveformDecoration() {
         preserveAspectRatio="none"
         width="100%"
         height="100%"
+        aria-hidden={true}
       >
         <polyline
           points={points}
@@ -67,8 +82,18 @@ function WaveformDecoration() {
   );
 }
 
-function DomainCard({ domain }: { domain: Domain }) {
+function ModuleCard({ module }: { module: Module }) {
   const navigate = useNavigate();
+
+  const handleOpen = () => {
+    if (!module.href) return;
+
+    if (module.external) {
+      window.open(module.href, "_blank", "noopener,noreferrer");
+    } else {
+      navigate(module.href);
+    }
+  };
 
   return (
     <Card.Root
@@ -76,36 +101,33 @@ function DomainCard({ domain }: { domain: Domain }) {
       cursor="pointer"
       _hover={{ transform: "scale(1.05)" }}
       transition="transform 0.2s ease"
-      onClick={() => domain.href && navigate(domain.href)}
+      onClick={handleOpen}
       tabIndex={0}
       role="button"
-      aria-label={`Open ${domain.label}`}
+      aria-label={`Open ${module.label}`}
       onKeyDown={(e) => {
-        if (domain.href && (e.key === "Enter" || e.key === " ")) {
+        if (module.href && (e.key === "Enter" || e.key === " ")) {
           e.preventDefault();
-          navigate(domain.href);
+          navigate(module.href);
         }
       }}
     >
       <Card.Body>
         <VStack align="flex-start" gap={3}>
           <HStack justify="space-between" w="100%">
-            <domain.Icon size="1.4rem" />
+            <module.Icon size="1.4rem" />
           </HStack>
-          <Card.Title>{domain.label}</Card.Title>
-          <Card.Description>{domain.description}</Card.Description>
+          <Card.Title>{module.label}</Card.Title>
+          <Card.Description>{module.description}</Card.Description>
         </VStack>
       </Card.Body>
     </Card.Root>
   );
 }
 
-// ─── Landing Page ─────────────────────────────────────────────────────────────
-
 export default function Landing() {
   return (
     <PageContainer nav={false}>
-      {/* Hero */}
       <Flex
         as="header"
         direction="column"
@@ -134,27 +156,26 @@ export default function Landing() {
         <WaveformDecoration />
 
         <Text fontSize="lg" maxW="540px" opacity={0.7}>
-          An accessible platform for transforming scientific datasets into tangible
-          audio representations. Choose a domain below to begin.
+          An accessible platform for transforming datasets into tangible audio
+          representations. Choose a module below to begin.
         </Text>
       </Flex>
 
-      {/* Domain cards */}
+      {/* Module cards */}
       <Box>
         <HStack gap={4} mb={5} align="center">
           <Heading as="h2" size="lg" fontWeight="400">
-            Domains
+            Modules
           </Heading>
           <Box flex={1} h="1px" bg="border" />
         </HStack>
 
         <Grid templateColumns={{ base: "1fr", md: "repeat(3, 1fr)" }} gap={4}>
-          {DOMAINS.map((domain) => (
-            <DomainCard key={domain.id} domain={domain} />
+          {MODULES.map((module) => (
+            <ModuleCard key={module.id} module={module} />
           ))}
         </Grid>
       </Box>
-
     </PageContainer>
   );
 }

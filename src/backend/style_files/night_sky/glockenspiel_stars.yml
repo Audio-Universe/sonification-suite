@@ -1,0 +1,31 @@
+name: "Glockenspiel Stars"
+
+description: "A glockenspiel plays the brightest stars first, with bluer stars playing higher notes, and redder stars playing lower."
+
+generator:
+  type: "sampler"
+  sample: "Glockenspiel"
+
+map:
+  - input: "colour"
+    output: "pitch"
+    function: "invert"
+
+  - input: "magnitude"
+    output: "volume"
+    output_range: [0.05, 1]
+    function: "invert"
+
+  - input: "magnitude"
+    input_range: ["0%", "120%"]
+    output: "time"
+
+  - input: "relative_azimuth"
+    output: "azimuth"
+
+  - input: "zenith_angle"
+    output: "polar"
+
+notes: ["C#3", "F#3", "G#3", "D#4", "F4"]
+
+sources: "events"

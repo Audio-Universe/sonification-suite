@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from pathlib import Path
 from paths import TMP_DIR, STYLE_FILES_DIR, SUGGESTED_DATA_DIR, SAMPLES_DIR
 from context import session_id_var
-import logging, requests, os, base64, hashlib, json, gc, threading
+import logging, requests, os, base64, hashlib, json, gc, threading, time
 
 import lightkurve as lk
 from lightkurve import LightCurve
@@ -26,19 +26,31 @@ router = APIRouter(prefix='/light-curves')
 
 executor = ThreadPoolExecutor(max_workers=4)
 
-CATEGORY = 'light_curves'
+SONI_TYPE = 'light_curves'
 
-STYLES_DIR = STYLE_FILES_DIR / CATEGORY
-STARS_DIR = SUGGESTED_DATA_DIR / CATEGORY
+STYLES_DIR = STYLE_FILES_DIR / SONI_TYPE
+STARS_DIR = SUGGESTED_DATA_DIR / SONI_TYPE
 
-logging.basicConfig(level=logging.DEBUG)
+# Rankings to sort light curve search results
+MISSION_RANK = {
+    "Kepler": 0,
+    "TESS": 1,
+    "K2": 2,
+}
+
+TESS_PIPELINE_RANK = {
+    "SPOC": 0,
+    "TESS-SPOC": 1,
+}
+
+logging.basicConfig(level=logging.INFO)
 LOG = logging.getLogger(__name__)
 
 
 def run_lightkurve_search(idents, authors, cancel_event: threading.Event):
     
     # Set a timeout on MAST requests
-    Observations.TIMEOUT = 10 
+    Observations.TIMEOUT = 30 
 
     results_metadata = []
 
@@ -56,7 +68,7 @@ def run_lightkurve_search(idents, authors, cancel_event: threading.Event):
             search_result = lk.search_lightcurve(
             ident,
             author=authors[id_type],
-            limit=20    # Max number of results to return (per ident)
+            # limit=20    # Max number of results to return (per ident)
             )
         except Exception as e:
             LOG.warning(f"Search failed for {ident}: {e}")
@@ -75,9 +87,54 @@ def run_lightkurve_search(idents, authors, cancel_event: threading.Event):
                 "period": str(row.get("mission")),
                 "dataURI": str(row.get("dataURI")),
             })
+    
+    # Finally, sort the search results using our custom criteria
+    results_metadata.sort(key=sort_key)
 
     return results_metadata
 
+def sort_key(row):
+    """Generate a sortable ranking tuple for a light curve search result.
+
+    Results are sorted primarily by mission priority (Kepler, TESS, K2).
+    Additional mission-specific criteria are then applied:
+
+    - Kepler/K2: newest observations first, then longest exposures first.
+    - TESS: preferred pipelines first (SPOC, then TESS-SPOC), then
+      newest observations first.
+
+    Args:
+        row (dict): Metadata for a single light curve result.
+
+    Returns:
+        tuple: A tuple of ranking values used by ``list.sort()`` to order
+            search results according to the desired mission, pipeline,
+            year, and exposure priorities.
+    """ 
+    mission = row["mission"]
+
+    if mission == "Kepler":
+        return (
+            MISSION_RANK[mission],
+            -row["year"],
+            -row["exposure"],
+        )
+
+    elif mission == "TESS":
+        return (
+            MISSION_RANK[mission],
+            TESS_PIPELINE_RANK.get(row["pipeline"], 99),
+            -row["year"],
+        )
+
+    elif mission == "K2":
+        return (
+            MISSION_RANK[mission],
+            -row["year"],
+            -row["exposure"],
+        )
+
+    return (99,)
 
 
 @router.post('/search-lightcurves/')
@@ -90,9 +147,6 @@ async def search_lightcurves(query: StarQuery, request: Request):
     """
     
     idents, ra, dec = get_identifiers(query)
-    
-    print('ra: ' + str(ra))
-    print('dec: ' + str(dec))
 
     mission_filters = query.filters['mission']
     missions = [k for k in mission_filters.keys() if mission_filters[k] == True]
@@ -113,7 +167,7 @@ async def search_lightcurves(query: StarQuery, request: Request):
     results_metadata = []
 
     authors = {
-            'TIC': ('SPOC', 'QLP', 'TESS-SPOC'),
+            'TIC': ('SPOC', 'TESS-SPOC', 'QLP'),
             'KIC': 'Kepler',
             'EPIC': 'K2SFF'
         }
@@ -132,7 +186,7 @@ async def search_lightcurves(query: StarQuery, request: Request):
     )
 
     try:
-        results_metadata = await asyncio.wait_for(task, timeout=20)
+        results_metadata = await asyncio.wait_for(task, timeout=30)
 
         if results_metadata is None:
             raise HTTPException(status_code=499, detail='Search cancelled')
@@ -188,37 +242,39 @@ def get_identifiers(query: StarQuery):
         print("SIMBAD query failed:", e)
         return [], None, None
 
-
 def download_lightcurve(data_uri):
     """
     This is a shared function used by both /select-lightcurve/ and /plot-lightcurve/.
-    It will give the lightcurve a unique ID, check if it has already been downloaded, and download it if not.
-    The purpose of this function is to avoid duplicate downloads (for instance, if a user previews the plot and then selects it for download).
+    It will download the light curve to the same location every time, overwriting the previous light curve.
+    This is intentionally to save disk space, as users only every need one light curve file at a time.
 
     - **data_uri**: The URI of the target lightcurve
-    - Returns: The filepath of the downloaded lightcurve.
+    - Returns: The CSV filepath of the downloaded lightcurve.
     """
 
-    # Create a unique (but reproducible) hash of the URI
-    hash = hashlib.md5(data_uri.encode()).hexdigest()
-    ext = os.path.splitext(data_uri)[-1]
-
-    filename = f'{hash}{ext}'
+    file_name = f'{SONI_TYPE}.csv'
     session_id = session_id_var.get()
-    filepath = TMP_DIR / session_id / filename
+    filepath = TMP_DIR / session_id / file_name
+        
+    url = f'https://mast.stsci.edu/api/v0.1/Download/file?uri={data_uri}'
+    lc = lk.read(url)
+    
+    time = lc.time.value
+    flux = lc.flux.value
+    
+    df = pd.DataFrame({
+        "time": np.asarray(time, dtype=np.float64),
+        "flux": np.asarray(flux, dtype=np.float64)
+    })
+    
+    first_valid = df["flux"].first_valid_index()
+    last_valid = df["flux"].last_valid_index()
 
-    if not os.path.exists(filepath):
-
-        # Convert URI to downloadable URL
-        download_url = f'https://mast.stsci.edu/api/v0.1/Download/file?uri={data_uri}'
-
-        # Download and check OK  
-        response = requests.get(download_url)
-        response.raise_for_status()
-
-        # Write to file 
-        with open(filepath, 'wb') as f:
-            f.write(response.content)
+    if first_valid is not None and last_valid is not None:
+        # Chop the start and end off if they are NaN
+        df = df.loc[first_valid:last_valid]
+    
+    df.to_csv(filepath, index=False)
 
     return filepath
 
@@ -234,6 +290,7 @@ def plot_lightcurve(request: DataRequest):
 
     # Check if the requested light curve is from a search (with data URI) or a local file.
     if (request.file_ref.startswith('mast:')):
+
         filepath = download_lightcurve(request.file_ref)
     else:
         filepath = resolve_file(request.file_ref)
@@ -243,32 +300,12 @@ def plot_lightcurve(request: DataRequest):
     return {'image': img_base64}
 
 
+def plot_and_format_lc(path_or_df: str | pd.DataFrame):
+    
+    df = pd.read_csv(path_or_df) if isinstance(path_or_df, str) else path_or_df
 
-
-def plot_and_format_lc(filepath: str):
-
-    # Check file extension
-    if filepath.endswith('.csv'):
-     
-        df = pd.read_csv(filepath)
-        
-        # Get column names for labels
-        columns = df.columns.tolist()
-        x_label = columns[0] if not is_number(columns[0]) else 'Column 1'
-        y_label = columns[1] if not is_number(columns[1]) else 'Column 2'
-        
-        time = df[columns[0]].values
-        flux = df[columns[1]].values
-        
-    elif filepath.endswith('.fits'):
-
-        # It's a FITS file
-        lc = lk.read(filepath)
-        time = lc.time.value
-        flux = lc.flux.value
-        
-        x_label = 'Time (days)'
-        y_label = 'Flux (electrons per second)'
+    time = df['time'].values
+    flux = df['flux'].values  
 
     # Plot and format
     fig = Figure(figsize=(6, 4))
@@ -282,8 +319,8 @@ def plot_and_format_lc(filepath: str):
         alpha=0.9
     )
     
-    ax.set_xlabel(x_label)
-    ax.set_ylabel(y_label)
+    ax.set_xlabel('Time (Days)')
+    ax.set_ylabel('Brightness (Flux)')
 
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
@@ -315,93 +352,87 @@ def select_lightcurve(request: DownloadRequest):
     return {'file_ref': file_ref}
 
 
-@router.post('/get-range/')
+@router.post('/get-range-and-nans/')
 def get_range(request: DataRequest):
 
     filepath = str(resolve_file(request.file_ref))
 
-    if filepath.endswith('.fits'):
-        lc = lk.read(filepath)
-        x = lc.time.value
-        value_range = [float(min(x)), float(max(x))]
+    df = pd.read_csv(filepath)
+    x = df['time'].values
+    value_range = [float(min(x)), float(max(x))]
+    
+    has_nans = bool(df['flux'].isna().any())
 
-    elif filepath.endswith('.csv'):
-        df = pd.read_csv(filepath)
+    return{'range': value_range, 'has_nans': has_nans}
 
-        time_col = df.columns[0]
 
-        x = df[time_col].values
-        value_range = [float(min(x)), float(max(x))]
-    else:
-        raise HTTPException(status_code=400, detail='File extension not supported: ' + request.file_ref.split(':')[-1])
+def refine_light_curve(request: RefineRequest):
+    
+    fill_methods = {
+        "min": lambda x: x.min(),
+        "max": lambda x: x.max(),
+        "mean": lambda x: x.mean(),
+        "median": lambda x: x.median(),
+        "mode": lambda x: x.mode().iloc[0], # Mode returns a Series
+    }
+    
+    filepath = str(resolve_file(request.file_ref))
+    
+    df = pd.read_csv(filepath)
+    
+    # Truncate to new range
+    new_start, new_end = request.new_range
+    df = df[(df['time'] >= new_start) & (df['time'] <= new_end)].copy()
+    
+    nans_after_trim = False
+    
+    # Apply selected NaN strategy
+    if df.isna().any().any():
+        nans_after_trim = True
+        
+        if request.nan_strategy == "fill":
+            fill_value = fill_methods[request.fill_with](df["flux"])
+            df["flux"] = df["flux"].fillna(fill_value)
 
-    return{'range': value_range}
+        elif request.nan_strategy == "interpolate":
+            df['flux'] = df['flux'].interpolate()
+
+        elif request.nan_strategy == "silence":
+            pass # Allow STRAUSS to mask NaNs with silence 
+    
+    if request.sigma > 0:
+        # Smooth data
+        y_values = df['flux'].values
+        smoothed_flux = gaussian_filter1d(y_values, request.sigma)
+
+        df['flux'] = smoothed_flux
+    
+    return df, nans_after_trim
 
 
 @router.post('/preview-refined/')
 def preview_refined(request: RefineRequest):
 
-    refined = save_refined(request)
-
-    filepath = str(resolve_file(refined['file_ref']))
+    refined, nans_after_trim = refine_light_curve(request)
        
     # Plot, format, and convert image to Base64
-    img_base64 = plot_and_format_lc(filepath)
+    img_base64 = plot_and_format_lc(refined)
 
-    return{'image': img_base64}
+    return{'image': img_base64, 'nans_after_trim': nans_after_trim}
 
 
 @router.post('/save-refined/')
 def save_refined(request: RefineRequest):
     
-    # Truncate x-axis to new range
-    new_start, new_end = request.new_range
-
-    original_filepath = str(resolve_file(request.file_ref))
-    
-    ext = original_filepath.split('.')[-1]
+    df, _ = refine_light_curve(request)
+ 
     session_id = session_id_var.get()
-    filename = request.data_name + '_refined.' + ext
-    
+    filename = f'{SONI_TYPE}_refined.csv'
     refined_filepath = TMP_DIR / session_id / filename
-    refined_ref = f'session:{filename}'
     
-    if ext == 'fits':
-        lc = lk.read(original_filepath)
-        lc = lc.truncate(new_start, new_end)
-        
-        if request.sigma > 0:
-            # Smooth y axis with Gaussian filter if sigma > 0
-            flux_unit = lc.flux.unit
-            smoothed_flux = gaussian_filter1d(lc.flux.value, request.sigma)
-            lc = lc.copy()
-            lc.flux = smoothed_flux * flux_unit
-            
-        # This is to prevent crashing from missing lightkurve metadata
-        if not hasattr(lc, "centroid_col"):
-            lc.centroid_col = None
-        if not hasattr(lc, "centroid_row"):
-            lc.centroid_row = None
-        
-        lc.to_fits(refined_filepath, overwrite=True)
-            
-    elif ext == 'csv':
-        df = pd.read_csv(original_filepath)
-        
-        time_col = df.columns[0]
-        df_truncated = df[(df[time_col] >= new_start) & (df[time_col] <= new_end)].copy()
-        
-        if request.sigma > 0:
-            
-            y_values = df_truncated.iloc[:, 1].values
-            smoothed_flux = gaussian_filter1d(y_values, request.sigma)
-
-            df_truncated.iloc[:, 1] = smoothed_flux
-            
-        df_truncated.to_csv(refined_filepath, index=False)
-        
-    else:
-        raise HTTPException(status_code=400, detail='Unsupported file type')
+    df.to_csv(refined_filepath, index=False)
+    
+    refined_ref = f'session:{filename}'
 
     return {'file_ref': refined_ref}
 

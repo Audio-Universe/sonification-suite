@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException
 
 from pydantic import BaseModel
 from pathlib import Path
-from paths import TMP_DIR, STYLE_FILES_DIR, SUGGESTED_DATA_DIR
+from paths import TMP_DIR, HYG_DATA
 from context import session_id_var
 import logging, base64, uuid, gc
 
@@ -21,14 +21,13 @@ from skyfield.api import load, Star, wgs84
 from timezonefinder import TimezoneFinder
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
-from typing import Literal
 
 LOG = logging.getLogger(__name__)
 logging.basicConfig(level=logging.DEBUG)
 
 router = APIRouter(prefix='/night-sky')
 
-CATEGORY = 'night_sky'
+SONI_TYPE = 'night_sky'
 
 COMPASS_KEYS = ['N','NNE','NE','ENE','E','ESE','SE',
                 'SSE','S','SSW','SW','WSW','W','WNW','NW','NNW']
@@ -66,10 +65,18 @@ EARTH = EPH['earth']
 
 LOG.info("Ephemeris loaded")
 
+HYG = pd.read_csv(HYG_DATA)
+HYG_NAMES = (
+    HYG
+    .dropna(subset=["hip"])
+    .drop_duplicates("hip")
+    .set_index("hip")["display_name"]
+)
+
 TF = TimezoneFinder()
 
 
-def handle_observer(observer: dict, style: dict):
+def handle_observer(observer: dict):
         
     lat = float(observer['latitude'])
     lon = float(observer['longitude'])
@@ -87,32 +94,28 @@ def handle_observer(observer: dict, style: dict):
     # Convert observing direction to radians
     direction = COMPASS_MAP[observer['orientation']]
     
-    az_rads = (az.radians - direction + np.pi) % (2*np.pi) - np.pi
-    polar_degs = 90 - alt.degrees
+    # Azimuth: 0° = ahead, 90° = left, 180° = behind, 270° = right
+    azimuth = (
+        np.degrees(direction) - az.degrees
+    ) % 360
     
-    # Normalise
-    azimuth = (az_rads + np.pi) / (2*np.pi)
-    polar = polar_degs / 180
+    # Stereo pan: 0 = left, 0.5 = centre, 1 = right
+    pan = (1 - np.sin(np.radians(azimuth))) / 2
     
-    params = style['parameters']
+    # Polar angle: 0° = zenith, 90° = horizon, 180° = nadir
+    polar = 90 - alt.degrees
     
-    params = [p for p in params if p['output'] not in ('azimuth', 'polar', 'pan')]
-    
-    params.append({
-        'input': azimuth,
-        'input_range': ('0%', '100%'),
-        'output': 'azimuth'
-    })
-    
-    params.append({
-        'input': polar,
-        'input_range': ('0%', '100%'),
-        'output': 'polar'
-    })
-    
-    style['parameters'] = params
-    
-    return style, [alt.degrees, az.degrees]
+    return {
+        'STRAUSS_inputs': {
+            'azimuth': azimuth,
+            'pan': pan,
+            'polar': polar
+        },
+        'display_values': {
+            'azimuth': az.degrees,
+            'altitude': alt.degrees
+        }
+    }
     
     
 def position_observer(lat, lon, date_time):
@@ -152,6 +155,8 @@ def get_star_data(request: NightSkyRequest):
 
     # Build dataframe to save
     star_data = pd.DataFrame({
+        "display_name": HYG_NAMES.reindex(HIP_DF.index[above_horizon]).values,
+        "hip": HIP_DF.index[above_horizon],
         "azimuth_rad": az.radians[above_horizon],
         "altitude_deg": alt.degrees[above_horizon],
         "magnitude": HIP_DF['magnitude'][above_horizon].values + 1e-2*np.random.random(above_horizon.sum()),
@@ -159,12 +164,21 @@ def get_star_data(request: NightSkyRequest):
         "direction_offset": direction
     })
 
-    # Calculate azimuth relative to observer
-    star_data['relative_az'] = (star_data["azimuth_rad"] - direction + np.pi) % (2*np.pi) - np.pi
+    # Calculate azimuth relative to observer, in degrees (0–360)
+    star_data['relative_azimuth'] = np.degrees(
+        (direction - star_data["azimuth_rad"]) % (2 * np.pi)
+    )
+    
+    # Convert altitude (90 to -90 degrees) to polar (0 to 180 degrees)
+    star_data['zenith_angle'] = 90 - star_data['altitude_deg']
+    
+    # Possibly need to add another column which transforms the azimuth into stereo pan?
+    # I.E if a user creates a custom night sky style and maps relative_azimuth to pan,
+    # the mapping won't work because the input values are in the wrong format
 
     # save to tmp directory (overwriting any existing dataset)
     session_id = session_id_var.get()
-    filename = f'{CATEGORY}_full.csv'
+    filename = f'{SONI_TYPE}.csv'
     filepath = TMP_DIR / session_id / filename
     star_data.to_csv(filepath, index=False)
 
@@ -183,7 +197,7 @@ def refine_stars(request: MagRequest):
     filtered = df[df['magnitude'] < request.maglim].copy()
 
     session_id = session_id_var.get()
-    filename = f'{CATEGORY}_refined.csv'
+    filename = f'{SONI_TYPE}_refined.csv'
     filepath = TMP_DIR / session_id / filename
 
     filtered.to_csv(filepath, index=False)
@@ -254,15 +268,6 @@ def plot_star_data(request: DataRequest):
     image = plot_and_format_stars(df)
 
     return {'image': image}
-
-
-test_request = NightSkyRequest(
-    latitude=21.54238,
-    longitude=39.19797,
-    facing='SSE',
-    date_time="2026-02-01 19:00:00",
-    maglim=4.5
-)
 
 
 

@@ -1,54 +1,81 @@
 import { lazy, Suspense } from "react";
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation } from "react-router-dom";
 import PageContainer from "../ui/PageContainer";
-import {
-  Box,
-  Heading,
-  Text,
-} from "@chakra-ui/react";
+import { Box, Heading, Text, Highlight, Separator } from "@chakra-ui/react";
+import { useComposer, useOptionalComposer } from "../../context/ComposerContext";
+import { NavigationState } from "../../types/navigation";
+import { ApplyResult } from "../../types/refine_menu";
 
 export default function Refine() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const composer = useOptionalComposer();
 
-    const navigate = useNavigate();
-    const location = useLocation();
-    const dataName = location.state.dataName
-    const dataRef = location.state.dataRef
-    const soniType = location.state.soniType
-    const ra = location.state.ra ?? null;
-    const dec = location.state.dec ?? null;
-    const userUpload = location.state.userUpload ?? false;
+  const dataName = location.state.dataName;
+  const sourceDataRef = location.state.sourceDataRef;
+  const soniType = location.state.soniType;
+  const ra = location.state.ra ?? null;
+  const dec = location.state.dec ?? null;
+  const layerID = location.state.layerID ?? null;
+  const idColumn = location.state.idColumn ?? null;
+  const constellationType = location.state.constellationType ?? null;
+  const importedNStars = location.state.importedNStars ?? null;
+  const importedOrder = location.state.importedOrder ?? null;
+  const importedMaxMag = location.state.importedMaxMag ?? null;
 
+  // Dynamically import the menu component
+  const Menu = lazy(() => import(`../refine_menus/${soniType}.tsx`));
 
-    // Dynamically import the menu component
-    const Menu = lazy(() => import(`../refine_menus/${soniType}.tsx`));
+  return (
+    <PageContainer>
+      <Heading as="h1">Refine</Heading>
+      <br />
+      <Text>
+        <Highlight query={dataName} styles={{ color: "teal.600" }}>
+          {`Optionally, edit the ${dataName} dataset`}
+        </Highlight>
+      </Text>
+      <br />
+      <Suspense>
+        <Menu
+          dataRef={sourceDataRef}
+          dataName={dataName}
+          constellationType={constellationType}
+          importedNStars={importedNStars}
+          importedOrder={importedOrder}
+          importedMaxMag={importedMaxMag}
+          idColumn={idColumn}
+          onApply={(result: ApplyResult) => {
+            const { newRef, idColumn, newRa, newDec, nStars, customOrder } = result;
 
+            // Go back to Data Composer with new data ref if we came from there
+            if (soniType === "data_composer") {
+              if (!composer) {
+                throw new Error("Data Composer requires ComposerProvider");
+              }
+              composer.updateLayer(layerID, {
+                dataRef: newRef,
+                idColumn: idColumn,
+                refined: true,
+              });
 
-    return(
-        <PageContainer>
-            <Box position='relative' as='main' role='main'>
-                <Heading as='h1'>Step 2: Refine</Heading>
-                <br />
-                <Text textStyle='lg'>Optionally, edit the {dataName} dataset</Text>
-                <br />
-                <br />
-                <Suspense>
-                    <Menu 
-                        dataRef={dataRef}
-                        dataName={dataName}
-                        onApply={(newRef: string, newRa?: number, newDec?: number) => {
-                            // Navigate with refined data
-                            
-                            navigate('/style', { state: { 
-                                dataRef: newRef, 
-                                dataName, 
-                                soniType, 
-                                ra: newRa ?? ra, 
-                                dec: newDec ?? dec,
-                                userUpload 
-                            } });
-                            }}/>
-                </Suspense>
-            </Box>
-        </PageContainer>
-    )
+              navigate("/data-composer");
+              return;
+            }
+
+            // Otherwise, proceed to Style
+            const state: NavigationState = {
+              ...location.state,
+              dataRef: newRef,
+              ra: newRa ?? ra,
+              dec: newDec ?? dec,
+              nStars,
+              customOrder
+            };
+            navigate("../style", { state });
+          }}
+        />
+      </Suspense>
+    </PageContainer>
+  );
 }

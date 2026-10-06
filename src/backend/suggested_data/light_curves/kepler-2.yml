@@ -1,0 +1,8 @@
+name: "Kepler 2"
+
+description: "A Hot Jupiter, Kepler-2b (or HAT-P-2b), orbits in just 2.2 days!"
+
+ra: 292.2473
+dec: 47.9695
+
+category: "exoplanet"
