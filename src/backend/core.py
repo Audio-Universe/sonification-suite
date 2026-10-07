@@ -516,6 +516,7 @@ def download_file(file_ref: str, name: str | None = None):
         media_type="application/octet-stream",
     )
 
+    # Cache buster
     response.headers["Cache-Control"] = "no-store, max-age=0"
 
     return response
@@ -525,7 +526,7 @@ def download_file(file_ref: str, name: str | None = None):
 async def upload_data(request: Request, file: UploadFile, soni_type: str | None = Form(None)):
     """
     Function for the user to upload their own data to the system, which is then written
-    to the tmp directory. The maximum file size is 10mb, as this is a limit set in nginx.
+    to the tmp directory. The maximum file size is 10mb (this is set in nginx).
 
     - **upload**: The user-uploaded data file and (optionally) the sonification type.
     - Returns: The filepath of the saved data file.

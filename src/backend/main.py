@@ -5,22 +5,20 @@ for lib in ["uvicorn", "matplotlib", "httpcore", "asyncio", "httpx", "urllib3", 
 
 logger = logging.getLogger("uvicorn.error")
 
-from fastapi import FastAPI, BackgroundTasks, Request, HTTPException
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import JSONResponse
 
 from light_curves import router as light_curve_router
 from constellations import router as constellations_router
 from night_sky import router as night_sky_router
 from core import router as core_router
 from data_composer import router as composer_router
-from paths import SYNTHS_DIR, SAMPLES_DIR, TMP_DIR, ROOT_DIR
+from paths import TMP_DIR
 from contextlib import asynccontextmanager
 from StorageManager import StorageManager
 from context import session_id_var
-from datetime import datetime
-import asyncio, os, httpx, psutil, tracemalloc, time, threading, shutil, sys, traceback
+import asyncio, sys, traceback
 
 # fcntl package is only available on unix systems
 if sys.platform != "win32":
