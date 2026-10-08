@@ -297,3 +297,24 @@ def cleanup_old_layers(session_id: str, n_layers: int):
 
         if layer_number > n_layers or suffix == ".mp3":
             file.unlink()
+            
+def is_bot(user_agent: str) -> bool:
+    """ Check user-agent header from client request to see if it contains one of the known
+        bot identifiers. We use this to prevent logging analytics for bot traffic.
+
+    Args:
+        user_agent (str): The user-agent header from the HTTP request
+
+    Returns:
+        bool: is it likely a bot?
+    """
+    bot_keywords = [
+        "bot",
+        "crawler",
+        "spider",
+        "slurp",
+        "bingpreview",
+        "facebookexternalhit",
+    ]
+
+    return any(keyword in user_agent.lower() for keyword in bot_keywords)

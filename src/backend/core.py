@@ -3,10 +3,10 @@ from fastapi.responses import FileResponse
 from pathlib import Path
 from paths import TMP_DIR, STYLE_FILES_DIR, SUGGESTED_DATA_DIR, SYNTHS_DIR, SAMPLES_DIR
 from context import session_id_var
-from utils import resolve_file, read_YAML_file, write_YAML_file, is_synth, write_sound_to_style, is_time_series, cleanup_old_layers
+from utils import resolve_file, read_YAML_file, write_YAML_file, is_synth, write_sound_to_style, is_time_series, cleanup_old_layers, is_bot
 from generator_mods import GENERATOR_MODS
-from request_models import DataRequest, CustomStyleSettings, LayerRequest, SonificationRequest, SoundInfo, VolumeRequest
-import logging, yaml, os, uuid, traceback, base64, gc, re, csv, shutil, math, tempfile, pickle
+from request_models import DataRequest, CustomStyleSettings, SonificationRequest, SoundInfo, VolumeRequest
+import logging, yaml, os, uuid, traceback, base64, gc, re, shutil, math, tempfile
 from param_descriptions import INPUTS, OUTPUTS
 from night_sky import handle_observer
 from analytics import log_event
@@ -32,15 +32,6 @@ LOG = logging.getLogger(__name__)
 UPLOAD_QUOTA_MB = 50
 UPLOAD_QUOTA_BYTES = UPLOAD_QUOTA_MB * 1024 * 1024
 
-FORMATTED_FILENAMES = {
-    'light_curves': 'Light Curve',
-    'constellations': 'Constellation',
-    'night_sky': 'Night Sky',
-    'data_composer': 'Data Composer'
-}
-
-MASTER_VOL = 0.5
-
 
 @router.get('/session/')
 def get_or_create_session(
@@ -59,11 +50,15 @@ def get_or_create_session(
             secure=True,
             path='/'
         )
-        log_event(session_id=session_id, ip=connection.client.host, event='session_start')
         
+        # check if the connection might be a bot (and don't log analytics)
+        user_agent = connection.headers.get("user-agent", "Unknown")
+        
+        if not is_bot(user_agent):
+            log_event(session_id=session_id, ip=connection.client.host, event='session_start')
 
-    user_dir = TMP_DIR / session_id
-    user_dir.mkdir(exist_ok=True)
+        user_dir = TMP_DIR / session_id
+        user_dir.mkdir(exist_ok=True)
 
     return {'session_id': session_id}
 

@@ -17,7 +17,7 @@ The API routes are split into different python modules by their functionality or
 !!! info "Formatting API endpoints"
     Throughout the Suite, we use hyphens (`-`) in place of spaces in all API endpoints, e.g. `light-curves/`. We also use a trailing `/` at the end of each endpoint, e.g. `/search-lightcurves/`. This is purely a stylistic choice, but one used consistently to avoid confusion.
 
-The full API documentation can be found [here](link to API).
+The full documentation for all API endpoints can be found [here](../api-reference).
 
 ## Data Layer
 
@@ -32,10 +32,39 @@ The workaround is that we have various directories in the backend for our shared
 
     In the backend, the session ID is stored as a Python context variable, so it can be accessed from anywhere. See the `@app.middleware` section in `main.py` and the `/session/` endpoint in `core.py` to see how it works.
 
-### File referencing
+### File Referencing
 
 You will see `file_ref` used quite a lot in the backend, and `fileRef` or `dataRef`, `styleRef` etc. in the frontend. We use a file referencing system so as to not expose the full filepaths/internal structure of the production server, and to avoid any cross-platform formatting errors (e.g. `/` vs `\`).
 
-We replace slashes with a colon and use `session` as a prefix if the file lives in the user's session directory, e.g. `session:audio_figure.wav`. A file ref for a shared file might be e.g. `style_files:constellations:mallets.yml`.
+We create file refs by replacing slashes with a colon and using `session` as a prefix if the file lives in the user's session directory, e.g. `session:audio_figure.wav`. A file ref for a shared file might be e.g. `style_files:constellations:mallets.yml`. The last element of a file ref is always the file name with suffix e.g. `beta_persei.csv`.
 
 The `resolve_file` function in `utils.py` translates these references into their full filepaths, returning a Path object from [pathlib](https://docs.python.org/3/library/pathlib.html) (which is used often in the app).
+
+### Storage Management
+
+With all of these session directories for each user, disk space on the server quickly gets eaten up. We have a few strategies for dealing with this - none are perfect, but they work within the confines of our self-hosted server.
+
+#### File Naming
+Firstly, we make use of identical file names in certain situations to force overwriting to the same file, hence avoiding writing to lots of new files that might only be temporary. This only makes sense where it is safe to do so, I.E. any time a user will only need **one** of something. 
+
+For instance, if a user searches for lightcurves, clicking 'plot' on each one will download the data on server, plot it, and return the image. If each user plots a handful of light curves, and each one is written to its own file, we will quickly bloat the server with data which we don't need. Hence, because each user will only ever need one light curve at a time, we overwrite `light_curves.csv` in the user's unique session directory each time. The same happens for constellations and night sky. 
+
+For Data Composer, each user-uploaded dataset is given a unique ID (as this is a security requirement from the University cyber team) and written to an `uploads` directory in the user's session directory. Each time a user uploads a file, we check the size of their session directory. If uploading the file would take it over the session quota (50 MB) it is rejected. We have a file name for each layer audio (`layer_1.wav`, `layer_2.wav` etc.) and one for the combined 'master' audio `audio_figure.wav`.
+
+#### Storage Manager
+We also implement a StorageManager class (`StorageManager.py`) which runs in the background and deletes any session directories older than 1 week (we can likely reduce this in the future, as any one user is unlikely to have a tab open for one week working on the same sonification).
+
+The storage manager also checks the overall disk space on the server, and will trigger a cleanup of the oldest session directories if the disk is over 70% full. If it is over 80% full, a more aggressive cleanup is triggered, which simply means it deletes more session directories to reach a lower target disk usage.
+
+The storage manager runs once every 6 hours to check disk space and clean up any old session directories. It is launched at startup (in `main.py`), and because we use 2 Uvicorn workers on our web server (I.E. two seprate processes), we use a [file lock](https://en.wikipedia.org/wiki/File_locking) to ensure only one process runs the cleanup.
+
+The StorageManager class has several attributes in its constructor which may be tweaked in the future, such as `max_age_days`, `disk_threshold_percent`, `cleanup_interval_hours`, `emergency_threshold_percent`, and `min_free_gb`.
+
+
+## Frontend
+
+The frontend is built using TypeScript and React. React is a JavaScript framework which facilitates single-page component-based user interfaces, and TypeScript is an extension of the JavaScript language that adds static typing (meaning the data types of variables are known before run time, helping to catch bugs early). 
+
+We also use Vite in development to run the development server and build the frontend (I.E. compile the frontend code into the assets that are ultimately served to the browser).
+
+We use ChakraUI v3 throughout as our component library. This means that all UI elements like buttons, sliders, inputs etc. come from the same place and have a shared style.
