@@ -10,7 +10,7 @@ As with most web apps, the backend handles the vast majority of the logic and da
 
 ### Backend Structure
 
-The majority of the backend functionality exists in the `src/backend` directory. The entry point for FastAPI is `main.py` - this is where the processes start and where we start the background cleanup task (more on this later).
+The majority of the backend functionality exists in the `src/backend` directory. The entry point for FastAPI is `main.py` - this is where the processes start and where we start the background cleanup task (more on this [below](#storage-manager)).
 
 The API routes are split into different python modules by their functionality or remit. For instance, you will find `light_curves.py` (for API endpoints relating to the light curve sonification type), `constellations.py` (for constellations), `night_sky.py` (for night sky), `data_composer.py` (for data composer), and `core.py` (for core functionality which is shared by all sonification types). Each of these has its own *router* which is then imported in `main.py`. This simply means that the API route for each endpoint is preceded by its router's prefix, e.g. `light-curves/search-lightcurves/` or `constellations/plot/`.
 
@@ -65,6 +65,9 @@ The StorageManager class has several attributes in its constructor which may be 
 
 The frontend is built using TypeScript and React. React is a JavaScript framework which facilitates single-page component-based user interfaces, and TypeScript is an extension of the JavaScript language that adds static typing (meaning the data types of variables are known before run time, helping to catch bugs early). 
 
-We also use Vite in development to run the development server and build the frontend (I.E. compile the frontend code into the assets that are ultimately served to the browser).
+We also use [Vite](https://vite.dev/) in development to run the development server and build the frontend (I.E. compile the frontend code into the index.html file that is ultimately served to the browser).
 
-We use ChakraUI v3 throughout as our component library. This means that all UI elements like buttons, sliders, inputs etc. come from the same place and have a shared style.
+We use [ChakraUI (v3)](https://chakra-ui.com/docs/components/concepts/overview) throughout as our component library. This means that all UI elements like buttons, sliders, inputs etc. come from the same place and have a shared style.
+
+### Frontend Structure
+
