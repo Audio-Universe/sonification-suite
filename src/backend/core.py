@@ -149,9 +149,6 @@ def generate_sonification(request: SonificationRequest, connection: Request):
     
     session_dir = TMP_DIR / session_id
     
-    # Check if we are sonifying star data (we use this to label the mapping table)
-    is_stars = request.soni_type in ['constellations', 'night_sky']
-    
     # Initialise AudioFigure
     fig = AudioFigure(system=request.system)
     
@@ -177,19 +174,9 @@ def generate_sonification(request: SonificationRequest, connection: Request):
             kwargs = {
                 'style': str(write_YAML_file(style_dict)),
                 'duration': request.duration,
-                'angle_unit': 'degrees' # use degrees as standard for azimuth/polar
+                'angle_unit': 'degrees', # use degrees as standard for azimuth/polar
+                'source_names': get_source_names(df, request.soni_type, layer)
             }
-
-            # Add identifier column for mapping table if necessary
-            if request.soni_type == 'data_composer' and layer.id_column:
-                source_names = df[layer.id_column].to_list()
-            elif is_stars:
-                source_names = df['display_name'].to_list()
-            else:
-                source_names = None
-                
-            kwargs['source_names'] = source_names
-                            
             
             # Add layer to the AudioFigure and sonify
             soni = fig.sonify(df, **kwargs)
@@ -202,7 +189,8 @@ def generate_sonification(request: SonificationRequest, connection: Request):
             source_name = 'source_0' if style_dict['sources'].lower() == 'objects' else None
             table: pd.DataFrame = fig.get_table(name=f'sonification_{i}', source=source_name)
             
-            if is_stars:
+            # if we are sonifying star data, add star names in mapping table
+            if request.soni_type in ['constellations', 'night_sky']:
                 table.rename(columns={'Source': 'Star Name'}, inplace=True)
                 # Add Hipparcos IDs
                 table['HIP'] = table['Star Name'].map(
@@ -261,6 +249,18 @@ def generate_sonification(request: SonificationRequest, connection: Request):
     file_ref = f'session:{filename}'
 
     return {'file_ref': file_ref, 'alt_az': alt_az}
+
+def get_source_names(df, soni_type, layer):
+    
+    # Add identifier column for mapping table if necessary
+    if soni_type == 'data_composer' and layer.id_column:
+        source_names = df[layer.id_column].to_list()
+    elif soni_type in ['constellations', 'night_sky']:
+        source_names = df['display_name'].to_list()
+    else:
+        source_names = None
+        
+    return source_names
 
 def preprocess_style(style_filepath: Path, df: pd.DataFrame, request: SonificationRequest):
     
