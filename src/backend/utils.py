@@ -84,15 +84,13 @@ def read_YAML_file(filepath):
     filepath = Path(filepath)
     with filepath.open(mode='r') as fdata:
         try:
-            YAML_dict = yaml.safe_load(fdata)
+            YAML_dict: dict = yaml.safe_load(fdata)
         except yaml.YAMLError as err:
               raise ValueError("Error reading YAML file, please check the filepath and ensure correct YAML syntax.") from err
     
     return YAML_dict
 
-def write_sound_to_style(style_filepath: Path | str, write_to_yml=True):
-    
-    style_dict = read_YAML_file(style_filepath)
+def write_sound_to_style(style_dict: dict):
         
     sound_key, ext, dir = (
         ('sample', '', 'samples') 
@@ -105,7 +103,7 @@ def write_sound_to_style(style_filepath: Path | str, write_to_yml=True):
     
     style_dict['generator'][sound_key] = str(sound_path)
     
-    return write_YAML_file(style_dict) if write_to_yml else style_dict
+    return style_dict
 
 def is_time_series(df: pd.DataFrame, style: dict):
     

@@ -32,6 +32,8 @@ LOG = logging.getLogger(__name__)
 UPLOAD_QUOTA_MB = 50
 UPLOAD_QUOTA_BYTES = UPLOAD_QUOTA_MB * 1024 * 1024
 
+# Maximum length a sonification can be (in seconds)
+MAX_DURATION = 120
 
 @router.get('/session/')
 def get_or_create_session(
@@ -94,9 +96,31 @@ def generate_sonification(request: SonificationRequest, connection: Request):
      
         This function is the primary function of the entire app, so it is fairly complex. 
         The request contains all the information needed to build the sonification, including 
-        the duration (in seconds), the audio system, the list of Layers to sonify (often this is just 
-        one layer unless using Data Composer feature) and optionally the Observer details (if using 
-        Place on Dome feature).
+        the duration (in seconds), the soni type (e.g. is it a constellation, light curve etc.), 
+        the audio system, the list of Layers to sonify (often this is just one layer unless using 
+        Data Composer feature) and optionally the Observer details (if using Place on Dome feature). 
+        The general flow is as follows:
+        
+        1. Preamble - check the sonification length doesn't exceed max, and create variables for session_id, 
+        session_dir, and is_stars (create these outside the loop as they are same for all layers).
+        
+        2. Initialise the AudioFigure - This is the STRAUSS object which contains the sonifications (and methods 
+        to generate/save them etc.)
+        
+        3. Loop through the Layers - Often there is only one layer (for light curves, constellations, etc). 
+        The process in each iteration is layer-specific (I.E. handles each layer's specific data and Style).
+        
+            3.1. Resolve data and style refs to their full filepaths
+            3.2. Replace sound name in Style file with its full filepath
+            3.3. Convert data to Pandas DataFrame
+            3.4. Check if data is time series (and therefore safe to downsample if necessary)
+            3.5. Check if this is a constellation with a custom playing order, and overwrite the 
+                 time mapping if so
+            3.6. Initialise the kwargs dict which is given to the AudioFigure's sonify() function
+            3.7. Set up Place on Dome feature (if using)
+            3.8. Add identifier column to mapping table (if sonifying stars, or user has chosen an 
+                 an identifer column in Data Composer)
+            3.9. 
 
     Args:
         request (SonificationRequest): the request object, containing all sonification instructions
@@ -104,7 +128,7 @@ def generate_sonification(request: SonificationRequest, connection: Request):
         then used to estimate their country to log in analytics.
 
     Raises:
-        HTTPException: 400 - if requested sonification is > 120 seconds (this is also prevented in the frontend)
+        HTTPException: 400 - if requested duration exceeds maximum (this is also prevented in the frontend)
         HTTPException: 400 - if no session ID present
         ValueError: if data file is not CSV
         ValueError: if Place on Dome feature requested for mono audio
@@ -115,8 +139,8 @@ def generate_sonification(request: SonificationRequest, connection: Request):
         alt_az (the altitude and azimuth of the object, if using Place on Dome feature)
     """
     
-    if request.duration > 120:
-            raise HTTPException(status_code=400, detail="Sonification too long, maximum length is 2 minutes.")
+    if request.duration > MAX_DURATION:
+            raise HTTPException(status_code=400, detail=f"Sonification too long, maximum length is {MAX_DURATION} seconds.")
         
     session_id = session_id_var.get()
     
@@ -139,58 +163,22 @@ def generate_sonification(request: SonificationRequest, connection: Request):
         
         try:
             
-            # First, replace base sound name with filepath to the sound
-            style_dict = write_sound_to_style(style_filepath, write_to_yml=False)
-            
-            # Next, validate data format and convert to DataFrame
+            # First, validate data format and convert to DataFrame
             data_type = data_filepath.suffix.lower()
                     
             if data_type == '.csv':
                     df = pd.read_csv(str(data_filepath), header=0)
             else:
                     raise ValueError(f'{data_type} file type not suitable for sonification, please use .csv.')
-                
-            # Determine whether it is safe to downsample the data
-            if is_time_series(df, style_dict):
-                 style_dict['max_notes_per_sec'] = style_dict.get('max_notes_per_sec') or 10
             
-            # Overwrite any time mappings if using a custom star order for constellations
-            if request.soni_type == 'constellations' and 'custom_order' in df.columns:
-                for m in style_dict['map']:
-                    if m['output'] == 'time':
-                        m['input'] = 'custom_order'
-                        m['function'] = None # Remove any previous invert functions
-                        break
-                        
+            style_dict, alt_az = preprocess_style(style_filepath, df, request)
+            
             # Build dict with keyword arguments for sonification function
             kwargs = {
+                'style': str(write_YAML_file(style_dict)),
                 'duration': request.duration,
                 'angle_unit': 'degrees' # use degrees as standard for azimuth/polar
             }
-            
-            # Handle case that 'Place on Dome' feature is used
-            if request.observer:
-                position_info = handle_observer(request.observer)
-                
-                # Remove any existing spatial mappings
-                style_dict['map'] = [mapping for mapping in style_dict['map'] 
-                                        if mapping['output'] not in ['azimuth', 'polar', 'pan']]
-                
-                # Add fixed values to kwargs
-                if request.system == 'stereo':
-                    # Use pan
-                    kwargs['fix_pan'] = position_info['STRAUSS_inputs']['pan']
-                elif request.system in ['5.1', '7.1']:
-                    # Use Azimuth and Polar
-                    for param in ['azimuth', 'polar']:
-                        kwargs[f'fix_{param}'] = position_info['STRAUSS_inputs'][param]
-                else:
-                    raise ValueError("Place on Dome feature not available for mono audio")
-                
-                # Get altitude and azimuth values in degrees to send to the frontend to display    
-                alt_az = [position_info['display_values'][value] for value in ['altitude', 'azimuth']]
-            else:
-                alt_az = None
 
             # Add identifier column for mapping table if necessary
             if request.soni_type == 'data_composer' and layer.id_column:
@@ -202,8 +190,6 @@ def generate_sonification(request: SonificationRequest, connection: Request):
                 
             kwargs['source_names'] = source_names
                             
-            # Add style to kwargs
-            kwargs['style'] = str(write_YAML_file(style_dict))
             
             # Add layer to the AudioFigure and sonify
             soni = fig.sonify(df, **kwargs)
@@ -275,6 +261,51 @@ def generate_sonification(request: SonificationRequest, connection: Request):
     file_ref = f'session:{filename}'
 
     return {'file_ref': file_ref, 'alt_az': alt_az}
+
+def preprocess_style(style_filepath: Path, df: pd.DataFrame, request: SonificationRequest):
+    
+    style_dict = read_YAML_file(style_filepath)
+    
+    # Replace base sound name with filepath to the sound
+    style_dict = write_sound_to_style(style_dict)
+        
+    # Determine whether it is safe to downsample the data
+    if is_time_series(df, style_dict):
+            style_dict['max_notes_per_sec'] = style_dict.get('max_notes_per_sec') or 10
+    
+    # Overwrite any time mappings if using a custom star order for constellations
+    if request.soni_type == 'constellations' and 'custom_order' in df.columns:
+        for m in style_dict['map']:
+            if m['output'] == 'time':
+                m['input'] = 'custom_order'
+                m['function'] = None # Remove any previous invert functions
+                break
+            
+    # Handle case that 'Place on Dome' feature is used
+    if request.observer:
+        position_info = handle_observer(request.observer)
+        
+        # Remove any existing spatial mappings
+        style_dict['map'] = [mapping for mapping in style_dict['map'] 
+                                if mapping['output'] not in ['azimuth', 'polar', 'pan']]
+        
+        # Add fixed values to kwargs
+        if request.system == 'stereo':
+            # Use pan
+            kwargs['fix_pan'] = position_info['STRAUSS_inputs']['pan']
+        elif request.system in ['5.1', '7.1']:
+            # Use Azimuth and Polar
+            for param in ['azimuth', 'polar']:
+                kwargs[f'fix_{param}'] = position_info['STRAUSS_inputs'][param]
+        else:
+            raise ValueError("Place on Dome feature not available for mono audio")
+        
+        # Get altitude and azimuth values in degrees to send to the frontend to display    
+        alt_az = [position_info['display_values'][value] for value in ['altitude', 'azimuth']]
+    else:
+        alt_az = None
+        
+    return style_dict, alt_az
     
     
 @router.post('/generate-spectrogram/')
@@ -908,8 +939,9 @@ def get_sound_info():
 def preview_style_settings(request: DataRequest):
 
     # Resolve style ref to path and swap sound name for full filepath
-    style = resolve_file(request.file_ref)
-    style_dict = write_sound_to_style(style, write_to_yml=False)
+    style_path = resolve_file(request.file_ref)
+    style_dict = read_YAML_file(style_path)
+    style_dict = write_sound_to_style(style_dict)
     
     # Generate synthetic data for previews
     N = 100 if style_dict["sources"] == "objects" else 50
