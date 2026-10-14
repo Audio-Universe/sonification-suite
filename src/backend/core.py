@@ -39,6 +39,18 @@ def get_or_create_session(
     response: Response,
     session_id: str | None = Cookie(None),
 ):
+    """ Get the session ID for this user. If none exists, this is a new connection, 
+        so create a new one. We also log new sessions this in the analytics file 
+        (provided we don't think it is bot traffic).
+
+    Args:
+        connection (Request): The HTTP connection
+        response (Response): the Response object (used to set the session ID in cookie)
+        session_id (str | None, optional): The session ID cookie, if present. Defaults to Cookie(None).
+
+    Returns:
+        str: session ID
+    """
     if not session_id:
         session_id = str(uuid.uuid4())
         response.set_cookie(
@@ -57,6 +69,7 @@ def get_or_create_session(
         if not is_bot(user_agent):
             log_event(session_id=session_id, ip=connection.client.host, event='session_start')
 
+        # Create session directory for user's files
         user_dir = TMP_DIR / session_id
         user_dir.mkdir(exist_ok=True)
 
@@ -77,16 +90,40 @@ def get_uploads_dir_size(uploads_dir: str) -> int:
 
 @router.post('/generate-sonification/')
 def generate_sonification(request: SonificationRequest, connection: Request):
+    """ Generate a sonification, write it to disk, and return the file ref.
+     
+        This function is the primary function of the entire app, so it is fairly complex. 
+        The request contains all the information needed to build the sonification, including 
+        the duration (in seconds), the audio system, the list of Layers to sonify (often this is just 
+        one layer unless using Data Composer feature) and optionally the Observer details (if using 
+        Place on Dome feature).
+
+    Args:
+        request (SonificationRequest): the request object, containing all sonification instructions
+        connection (Request): the HTTP connection. We use this to get the client IP address which is 
+        then used to estimate their country to log in analytics.
+
+    Raises:
+        HTTPException: 400 - if requested sonification is > 120 seconds (this is also prevented in the frontend)
+        HTTPException: 400 - if no session ID present
+        ValueError: if data file is not CSV
+        ValueError: if Place on Dome feature requested for mono audio
+        HTTPException: for any other errors raised during sonification process
+
+    Returns:
+        dict: JSON object containing file_ref (the reference to the generated audio file) and 
+        alt_az (the altitude and azimuth of the object, if using Place on Dome feature)
+    """
     
+    if request.duration > 120:
+            raise HTTPException(status_code=400, detail="Sonification too long, maximum length is 2 minutes.")
+        
     session_id = session_id_var.get()
     
     if not session_id:
         raise HTTPException(status_code=400, detail="No session cookie found")
     
     session_dir = TMP_DIR / session_id
-    
-    if request.duration > 60:
-        raise HTTPException(status_code=400, detail="Sonification too long, maximum length is 1 minute.")
     
     # Check if we are sonifying star data (we use this to label the mapping table)
     is_stars = request.soni_type in ['constellations', 'night_sky']
