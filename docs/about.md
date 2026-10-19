@@ -116,9 +116,10 @@ NumPy
 
 ## Images
 
-Photograph of Orion constellation: Encyclopædia Britannica, available at: https://www.britannica.com/topic/Orion-Greek-mythology#/media/1/432656/107532 
+Photograph of Orion constellation: Encyclopædia Britannica, available at: [https://www.britannica.com/topic/Orion-Greek-mythology#/media/1/432656/107532](https://www.britannica.com/topic/Orion-Greek-mythology#/media/1/432656/107532) 
 
-Photograph of binary star: NASA, available at: https://images.nasa.gov/details/hubble-observes-one-of-a-kind-star-nicknamed-nasty_17754652960_o 
+Photograph of binary star: NASA, available at: [https://images.nasa.gov/details/hubble-observes-one-of-a-kind-star-nicknamed-nasty_17754652960_o](https://images.nasa.gov/details/hubble-observes-one-of-a-kind-star-nicknamed-nasty_17754652960_o) 
 
-Photograph of night sky/Milky Way: Nathan Anderson, available at: https://unsplash.com/photos/photo-of-milky-way-during-nighttime-ccxSX0f6fu8 
-Images of constellation stick figures: NSF NOIRLab, licensed under Creative Commons Attribution 4.0 International License. Available at: https://noirlab.edu/public/media/static/88-IAU-Constellations.zip 
+Photograph of night sky/Milky Way: Nathan Anderson, available at: [https://unsplash.com/photos/photo-of-milky-way-during-nighttime-ccxSX0f6fu8](https://unsplash.com/photos/photo-of-milky-way-during-nighttime-ccxSX0f6fu8)
+
+Images of constellation stick figures: NSF NOIRLab, licensed under Creative Commons Attribution 4.0 International License. Available at: [https://noirlab.edu/public/media/static/88-IAU-Constellations.zip](https://noirlab.edu/public/media/static/88-IAU-Constellations.zip) 
