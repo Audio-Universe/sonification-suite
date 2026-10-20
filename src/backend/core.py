@@ -168,7 +168,7 @@ def generate_sonification(request: SonificationRequest, connection: Request):
             else:
                     raise ValueError(f'{data_type} file type not suitable for sonification, please use .csv.')
             
-            style_dict, alt_az = preprocess_style(style_filepath, df, request)
+            style_dict = preprocess_style(style_filepath, df, request)
             
             # Build dict with keyword arguments for sonification function
             kwargs = {
@@ -178,6 +178,12 @@ def generate_sonification(request: SonificationRequest, connection: Request):
                 'source_names': get_source_names(df, request.soni_type, layer)
             }
             
+            # Handle case 'Place on Dome' feature is being used
+            if request.observer:
+                alt_az = place_on_dome(request.observer, style_dict, kwargs, request.system)
+            else:
+                alt_az = None
+            
             # Add layer to the AudioFigure and sonify
             soni = fig.sonify(df, **kwargs)
             
@@ -185,41 +191,10 @@ def generate_sonification(request: SonificationRequest, connection: Request):
                 # Set initial volume if not 1 (default)
                 fig.set_level(name=f'sonification_{i}', level=layer.volume)
             
-            # Get the mapping table(s)
-            source_name = 'source_0' if style_dict['sources'].lower() == 'objects' else None
-            table: pd.DataFrame = fig.get_table(name=f'sonification_{i}', source=source_name)
+            # Write the Mapping Table to CSV in user's session directory
+            write_mapping_table(fig, style_dict, request.soni_type, request.observer, df, i, session_dir)
             
-            # if we are sonifying star data, add star names in mapping table
-            if request.soni_type in ['constellations', 'night_sky']:
-                table.rename(columns={'Source': 'Star Name'}, inplace=True)
-                # Add Hipparcos IDs
-                table['HIP'] = table['Star Name'].map(
-                    df.set_index('display_name')['hip']
-                )
-                
-                # Move the column next to display name
-                cols = list(table.columns)
-                cols.remove(('HIP', ''))
-                cols.insert(cols.index(('Star Name', '')) + 1, ('HIP', ''))
-                table = table[cols]
-                
-            if request.observer:
-                fixed_table = fig.get_fixed_table(name=f'sonification_{i}', source=source_name)
-                # Add each fixed parameter as a column in main mapping table
-                for _, row in fixed_table.iterrows():
-                    parameter = row['parameter']
-                    value = row['value']
-                    unit = row['unit']
-                    unit_header = f'[{unit}]' if unit else ''
-                    table[(parameter, unit_header)] = value
-            
-            # Save mapping table to CSV
-            table_path = session_dir / f'mapping_table_{i}.csv'
-            table.to_csv(table_path, index=False)
-            
-            n_layers = len(request.layers)
-            
-            if n_layers > 1:
+            if len(request.layers) > 1:
                 # Save individual layers so users can download them if desired
                 soni.render(progress=False)
                 layer_name = f'layer_{i}.wav'
@@ -244,7 +219,7 @@ def generate_sonification(request: SonificationRequest, connection: Request):
     fig.save(filepath, master_volume=master_volume)
     
     log_event(session_id=session_id, ip=connection.client.host, event='sonification_generated', sonification_type=request.soni_type)
-    cleanup_old_layers(session_id, n_layers)
+    cleanup_old_layers(session_id, len(request.layers))
 
     file_ref = f'session:{filename}'
 
@@ -280,32 +255,68 @@ def preprocess_style(style_filepath: Path, df: pd.DataFrame, request: Sonificati
                 m['input'] = 'custom_order'
                 m['function'] = None # Remove any previous invert functions
                 break
-            
-    # Handle case that 'Place on Dome' feature is used
-    if request.observer:
-        position_info = handle_observer(request.observer)
         
-        # Remove any existing spatial mappings
-        style_dict['map'] = [mapping for mapping in style_dict['map'] 
-                                if mapping['output'] not in ['azimuth', 'polar', 'pan']]
-        
-        # Add fixed values to kwargs
-        if request.system == 'stereo':
-            # Use pan
-            kwargs['fix_pan'] = position_info['STRAUSS_inputs']['pan']
-        elif request.system in ['5.1', '7.1']:
-            # Use Azimuth and Polar
-            for param in ['azimuth', 'polar']:
-                kwargs[f'fix_{param}'] = position_info['STRAUSS_inputs'][param]
-        else:
-            raise ValueError("Place on Dome feature not available for mono audio")
-        
-        # Get altitude and azimuth values in degrees to send to the frontend to display    
-        alt_az = [position_info['display_values'][value] for value in ['altitude', 'azimuth']]
+    return style_dict
+
+def place_on_dome(observer_info: dict, style: dict, kwargs: dict, audio_system: str):
+    
+    # First, get position of object relative to observer
+    position_info = handle_observer(observer_info)
+    
+    # Add fixed values to kwargs
+    if audio_system == 'stereo':
+        # Use pan
+        kwargs['fix_pan'] = position_info['STRAUSS_inputs']['pan']
+    elif audio_system in ['5.1', '7.1']:
+        # Use Azimuth and Polar
+        for param in ['azimuth', 'polar']:
+            kwargs[f'fix_{param}'] = position_info['STRAUSS_inputs'][param]
     else:
-        alt_az = None
+        raise ValueError("Place on Dome feature not available for mono audio")
+    
+    # Get altitude and azimuth values in degrees to send to the frontend to display    
+    alt_az = [position_info['display_values'][value] for value in ['altitude', 'azimuth']]
+    
+    # Finally, remove any existing spatial mappings from style, and rewrite to kwargs
+    style['map'] = [mapping for mapping in style['map'] 
+                        if mapping['output'] not in ['azimuth', 'polar', 'pan']]
+
+    kwargs['style'] = str(write_YAML_file(style))
+    
+    return alt_az
+
+def write_mapping_table(fig: AudioFigure, style_dict: dict, soni_type: str, observer: dict | None, df: pd.DataFrame, layer_index: int, session_dir: Path):
+    # Get the mapping table(s)
+    source_name = 'source_0' if style_dict['sources'].lower() == 'objects' else None
+    table: pd.DataFrame = fig.get_table(name=f'sonification_{layer_index}', source=source_name)
+    
+    # if we are sonifying star data, add star names in mapping table
+    if soni_type in ['constellations', 'night_sky']:
+        table.rename(columns={'Source': 'Star Name'}, inplace=True)
+        # Add Hipparcos IDs
+        table['HIP'] = table['Star Name'].map(
+            df.set_index('display_name')['hip']
+        )
         
-    return style_dict, alt_az
+        # Move the column next to display name
+        cols = list(table.columns)
+        cols.remove(('HIP', ''))
+        cols.insert(cols.index(('Star Name', '')) + 1, ('HIP', ''))
+        table = table[cols]
+        
+    if observer:
+        fixed_table = fig.get_fixed_table(name=f'sonification_{layer_index}', source=source_name)
+        # Add each fixed parameter as a column in main mapping table
+        for _, row in fixed_table.iterrows():
+            parameter = row['parameter']
+            value = row['value']
+            unit = row['unit']
+            unit_header = f'[{unit}]' if unit else ''
+            table[(parameter, unit_header)] = value
+    
+    # Save mapping table to CSV
+    table_path = session_dir / f'mapping_table_{layer_index}.csv'
+    table.to_csv(table_path, index=False)
     
     
 @router.post('/generate-spectrogram/')
