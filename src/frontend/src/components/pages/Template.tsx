@@ -102,7 +102,7 @@ export default function Template() {
   /* 
     Unlike UseEffects, which are special functions (hooks) unique to React,
     handlers are just normal functions, but it is common practice to create a 
-    handler function for each interaction a user might have in the app.
+    handler for each interaction a user might have in the app.
 
     In this case, we have a handler for when a user selects an item from the ComboBox, 
     and for when a user clicks one of the suggested data items.
@@ -116,6 +116,7 @@ export default function Template() {
       item: item.value
     }
 
+    // apiRequest is a function I made to reduce repetitive boilerplate code for each API request
     const response = await apiRequest(url, payload)
 
     const state: NavigationState = {
