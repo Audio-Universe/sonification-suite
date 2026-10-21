@@ -87,7 +87,6 @@ export default function Constellations() {
   }, []);
 
   const handleSelectPattern = (item: PatternItem) => {
-    if (!item.value) return;
 
     const state: NavigationState = {
       dataName: item.value,

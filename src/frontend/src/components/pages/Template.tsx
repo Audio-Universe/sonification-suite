@@ -40,15 +40,15 @@ import {
 import { NavigationState } from "../../types/navigation";
 import ErrorMsg from "../ui/ErrorMsg";
 import { DataImport, ImportResult } from "../utils/DataImport";
+import { apiRequest } from "../../utils/requests";
 
 // ChakraUI dropdowns tend to like items in this format
 interface ListItem {
-  label: string; // This is the text that is displayed to the user
+  label: string; // This is the (nicely formatted) text that is displayed to the user
   value: string; // This is the underlying value which may get passed to/from the backend
 }
 
 export default function Template() {
-
   const soniType = "template";
 
   const navigate = useNavigate();
@@ -59,8 +59,10 @@ export default function Template() {
   const [importErrorMessage, setImportErrorMessage] = useState("");
 
   /*************** UseEffects ***************/
-  /* These are functions that 'watch' a value and are triggered everytime the value changes.
+  /* 
+    These are functions that 'watch' a value and are triggered everytime the value changes.
     The value to be watched goes inside the array at the end of the function (called the dependency array).
+    
     Here, we leave the dependency arrays empty on both our UseEffects. This means that the functions will 
     both run once when the page/component initially loads.
   */
@@ -82,7 +84,6 @@ export default function Template() {
     fetch(`${templateAPI}/list/`)
       .then((res) => res.json())
       .then((data) => {
-
         // Here we just use the same value for label & value, but you might want something different
         const formattedList = data.map((item: string) => ({
           label: item,
@@ -96,10 +97,29 @@ export default function Template() {
       });
   }, []); // <-- empty dependency array
 
-  const handleSelectListItem = (item: ListItem) => {
-    if (!item.value) return; // This keeps TypeScript happy, otherwise it flags that 'item' could be null
+
+  /*************** Handlers ***************/
+  /* 
+    Unlike UseEffects, which are special functions (hooks) unique to React,
+    handlers are just normal functions, but it is common practice to create a 
+    handler function for each interaction a user might have in the app.
+
+    In this case, we have a handler for when a user selects an item from the ComboBox, 
+    and for when a user clicks one of the suggested data items.
+  */
+
+  const handleSelectListItem = async (item: ListItem) => {
+
+    // Here we imagine that this api request downloads the chosen data in the backend and returns the file ref
+    const url = `${templateAPI}/select-item/`
+    const payload = {
+      item: item.value
+    }
+
+    const response = await apiRequest(url, payload)
 
     const state: NavigationState = {
+      dataRef: response.file_ref,
       dataName: item.label,
       soniType, // shorthand for soniType: soniType
     };
@@ -107,9 +127,7 @@ export default function Template() {
     navigate("../refine", { state });
   };
 
-  const handleSelectSuggested = (item: SuggestedData) => {
-
-  }
+  const handleSelectSuggested = (item: SuggestedData) => {};
 
   const handleImportSuccess = (result: ImportResult) => {
     const state: NavigationState = {
