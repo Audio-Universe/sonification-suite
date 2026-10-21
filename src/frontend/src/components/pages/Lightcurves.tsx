@@ -57,8 +57,6 @@ import { NavigationState } from "../../types/navigation";
 import { capitaliseWords } from "../../utils/formatting";
 import { DataImport, ImportResult } from "../utils/DataImport";
 
-const soniType = "light_curves";
-
 export interface Lightcurve {
   id: string;
   mission: string;
@@ -79,6 +77,9 @@ export interface SuggestedData {
 }
 
 export default function Lightcurves() {
+
+  const soniType = "light_curves";
+
   // Instantiate navigation
   const navigate = useNavigate();
 

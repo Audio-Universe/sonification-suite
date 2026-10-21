@@ -1,17 +1,9 @@
+# External imports (from dependencies)
+import logging, yaml, os, uuid, traceback, base64, gc, re, shutil, math, tempfile
 from fastapi import APIRouter, HTTPException, UploadFile, File, Cookie, Response, Request, BackgroundTasks, Form
 from fastapi.responses import FileResponse
 from pathlib import Path
-from paths import TMP_DIR, STYLE_FILES_DIR, SUGGESTED_DATA_DIR, SYNTHS_DIR, SAMPLES_DIR
-from context import session_id_var
-from utils import resolve_file, read_YAML_file, write_YAML_file, is_synth, write_sound_to_style, is_time_series, cleanup_old_layers, is_bot
-from generator_mods import GENERATOR_MODS
-from request_models import DataRequest, CustomStyleSettings, SonificationRequest, SoundInfo, VolumeRequest
-import logging, yaml, os, uuid, traceback, base64, gc, re, shutil, math, tempfile
-from param_descriptions import INPUTS, OUTPUTS
-from night_sky import handle_observer
-from analytics import log_event
 from strauss import AudioFigure
-
 import numpy as np
 import pandas as pd
 import matplotlib
@@ -22,6 +14,15 @@ from scipy.signal import spectrogram, resample_poly
 from io import BytesIO
 from pydub import AudioSegment
 
+# Internal imports (from Suite)
+from paths import TMP_DIR, STYLE_FILES_DIR, SUGGESTED_DATA_DIR, SYNTHS_DIR, SAMPLES_DIR
+from context import session_id_var
+from utils import resolve_file, read_YAML_file, write_YAML_file, is_synth, write_sound_to_style, cleanup_old_layers, is_bot
+from sonification_helpers import get_source_names, preprocess_style, place_on_dome, write_mapping_table
+from generator_mods import GENERATOR_MODS
+from request_models import DataRequest, CustomStyleSettings, SonificationRequest, SoundInfo, VolumeRequest
+from param_descriptions import INPUTS, OUTPUTS
+from analytics import log_event
 
 router = APIRouter(prefix='/core')
 
@@ -101,8 +102,8 @@ def generate_sonification(request: SonificationRequest, connection: Request):
         Data Composer feature) and optionally the Observer details (if using Place on Dome feature). 
         The general flow is as follows:
         
-        1. Preamble - check the sonification length doesn't exceed max, and create variables for session_id, 
-        session_dir, and is_stars (create these outside the loop as they are same for all layers).
+        1. Preamble - check the sonification length doesn't exceed max, and create variables for session_id and 
+        session_dir (create these outside the loop as they are same for all layers).
         
         2. Initialise the AudioFigure - This is the STRAUSS object which contains the sonifications (and methods 
         to generate/save them etc.)
@@ -111,16 +112,19 @@ def generate_sonification(request: SonificationRequest, connection: Request):
         The process in each iteration is layer-specific (I.E. handles each layer's specific data and Style).
         
             3.1. Resolve data and style refs to their full filepaths
-            3.2. Replace sound name in Style file with its full filepath
-            3.3. Convert data to Pandas DataFrame
-            3.4. Check if data is time series (and therefore safe to downsample if necessary)
-            3.5. Check if this is a constellation with a custom playing order, and overwrite the 
-                 time mapping if so
-            3.6. Initialise the kwargs dict which is given to the AudioFigure's sonify() function
-            3.7. Set up Place on Dome feature (if using)
-            3.8. Add identifier column to mapping table (if sonifying stars, or user has chosen an 
-                 an identifer column in Data Composer)
-            3.9. 
+            3.2. Convert data to Pandas DataFrame
+            3.3. Pre-process Style file by making all necessary edits
+            3.4. Initialise the kwargs dict which is given to the AudioFigure's sonify() function
+            3.5. Set up 'Place on Dome' feature (if using)
+            3.6. Add layer to the AudioFigure by calling sonify()
+            3.7. Write the layer's Mapping Table to CSV
+            3.8. Write the layer audio to WAV so user can download individual layers
+            
+            Loop through these steps as many times as there are layers
+            
+        4. Write the AudioFigure to WAV in user's session directory
+        
+        5. Log the 'sonification generated' event in the analytics file, and cleanup any old audio files
 
     Args:
         request (SonificationRequest): the request object, containing all sonification instructions
@@ -131,12 +135,11 @@ def generate_sonification(request: SonificationRequest, connection: Request):
         HTTPException: 400 - if requested duration exceeds maximum (this is also prevented in the frontend)
         HTTPException: 400 - if no session ID present
         ValueError: if data file is not CSV
-        ValueError: if Place on Dome feature requested for mono audio
         HTTPException: for any other errors raised during sonification process
 
     Returns:
         dict: JSON object containing file_ref (the reference to the generated audio file) and 
-        alt_az (the altitude and azimuth of the object, if using Place on Dome feature)
+        alt_az (the altitude and azimuth of the object, if using Place on Dome feature, for the frontend to display)
     """
     
     if request.duration > MAX_DURATION:
@@ -168,6 +171,7 @@ def generate_sonification(request: SonificationRequest, connection: Request):
             else:
                     raise ValueError(f'{data_type} file type not suitable for sonification, please use .csv.')
             
+            # Make all necessary edits to Style file
             style_dict = preprocess_style(style_filepath, df, request)
             
             # Build dict with keyword arguments for sonification function
@@ -208,13 +212,13 @@ def generate_sonification(request: SonificationRequest, connection: Request):
             LOG.error("Error generating sonification:\n" + traceback.format_exc())
             raise HTTPException(
                 status_code=500,
-                detail="Error generating sonification. If error persists, please try with different Style settings."
+                detail="Error generating sonification. If error persists, please try again with different Style settings."
             )
     
     filename = 'audio_figure.wav'
     filepath = session_dir / filename
     
-    # Set master volume to maximum of layer volumes
+    # Set master volume to maximum of all layer volumes
     master_volume = max([layer.volume for layer in request.layers])
     fig.save(filepath, master_volume=master_volume)
     
@@ -224,99 +228,6 @@ def generate_sonification(request: SonificationRequest, connection: Request):
     file_ref = f'session:{filename}'
 
     return {'file_ref': file_ref, 'alt_az': alt_az}
-
-def get_source_names(df, soni_type, layer):
-    
-    # Add identifier column for mapping table if necessary
-    if soni_type == 'data_composer' and layer.id_column:
-        source_names = df[layer.id_column].to_list()
-    elif soni_type in ['constellations', 'night_sky']:
-        source_names = df['display_name'].to_list()
-    else:
-        source_names = None
-        
-    return source_names
-
-def preprocess_style(style_filepath: Path, df: pd.DataFrame, request: SonificationRequest):
-    
-    style_dict = read_YAML_file(style_filepath)
-    
-    # Replace base sound name with filepath to the sound
-    style_dict = write_sound_to_style(style_dict)
-        
-    # Determine whether it is safe to downsample the data
-    if is_time_series(df, style_dict):
-            style_dict['max_notes_per_sec'] = style_dict.get('max_notes_per_sec') or 10
-    
-    # Overwrite any time mappings if using a custom star order for constellations
-    if request.soni_type == 'constellations' and 'custom_order' in df.columns:
-        for m in style_dict['map']:
-            if m['output'] == 'time':
-                m['input'] = 'custom_order'
-                m['function'] = None # Remove any previous invert functions
-                break
-        
-    return style_dict
-
-def place_on_dome(observer_info: dict, style: dict, kwargs: dict, audio_system: str):
-    
-    # First, get position of object relative to observer
-    position_info = handle_observer(observer_info)
-    
-    # Add fixed values to kwargs
-    if audio_system == 'stereo':
-        # Use pan
-        kwargs['fix_pan'] = position_info['STRAUSS_inputs']['pan']
-    elif audio_system in ['5.1', '7.1']:
-        # Use Azimuth and Polar
-        for param in ['azimuth', 'polar']:
-            kwargs[f'fix_{param}'] = position_info['STRAUSS_inputs'][param]
-    else:
-        raise ValueError("Place on Dome feature not available for mono audio")
-    
-    # Get altitude and azimuth values in degrees to send to the frontend to display    
-    alt_az = [position_info['display_values'][value] for value in ['altitude', 'azimuth']]
-    
-    # Finally, remove any existing spatial mappings from style, and rewrite to kwargs
-    style['map'] = [mapping for mapping in style['map'] 
-                        if mapping['output'] not in ['azimuth', 'polar', 'pan']]
-
-    kwargs['style'] = str(write_YAML_file(style))
-    
-    return alt_az
-
-def write_mapping_table(fig: AudioFigure, style_dict: dict, soni_type: str, observer: dict | None, df: pd.DataFrame, layer_index: int, session_dir: Path):
-    # Get the mapping table(s)
-    source_name = 'source_0' if style_dict['sources'].lower() == 'objects' else None
-    table: pd.DataFrame = fig.get_table(name=f'sonification_{layer_index}', source=source_name)
-    
-    # if we are sonifying star data, add star names in mapping table
-    if soni_type in ['constellations', 'night_sky']:
-        table.rename(columns={'Source': 'Star Name'}, inplace=True)
-        # Add Hipparcos IDs
-        table['HIP'] = table['Star Name'].map(
-            df.set_index('display_name')['hip']
-        )
-        
-        # Move the column next to display name
-        cols = list(table.columns)
-        cols.remove(('HIP', ''))
-        cols.insert(cols.index(('Star Name', '')) + 1, ('HIP', ''))
-        table = table[cols]
-        
-    if observer:
-        fixed_table = fig.get_fixed_table(name=f'sonification_{layer_index}', source=source_name)
-        # Add each fixed parameter as a column in main mapping table
-        for _, row in fixed_table.iterrows():
-            parameter = row['parameter']
-            value = row['value']
-            unit = row['unit']
-            unit_header = f'[{unit}]' if unit else ''
-            table[(parameter, unit_header)] = value
-    
-    # Save mapping table to CSV
-    table_path = session_dir / f'mapping_table_{layer_index}.csv'
-    table.to_csv(table_path, index=False)
     
     
 @router.post('/generate-spectrogram/')

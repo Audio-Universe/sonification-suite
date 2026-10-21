@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { LuFileUp, LuFilm, LuTelescope } from "react-icons/lu";
+import { LuFilm, LuTelescope } from "react-icons/lu";
 import PageContainer from "../ui/PageContainer";
 import { getImage, randomRange } from "../../utils/assets";
 import { coreAPI, constellationsAPI } from "../../apiConfig";
@@ -9,30 +9,17 @@ import { SuggestedData } from "./Lightcurves";
 import {
   Box,
   Alert,
-  Button,
   Card,
-  Checkbox,
-  Collapsible,
-  LinkOverlay,
   Link,
-  Image,
-  Field,
-  Input,
   InputGroup,
-  Dialog,
   Stack,
   Heading,
-  VStack,
-  Table,
   Text,
-  IconButton,
-  chakra,
   HStack,
   Combobox,
   createListCollection,
   useFilter,
   Portal,
-  FileUpload,
 } from "@chakra-ui/react";
 import { NavigationState } from "../../types/navigation";
 import ErrorMsg from "../ui/ErrorMsg";

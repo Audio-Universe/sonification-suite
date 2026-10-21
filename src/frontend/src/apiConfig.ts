@@ -9,3 +9,5 @@ export const constellationsAPI = `${apiUrl}/constellations`
 export const nightSkyAPI = `${apiUrl}/night-sky`
 export const composerAPI = `${apiUrl}/data-composer`
 
+export const templateAPI = `${apiUrl}/template`
+
