@@ -513,8 +513,17 @@ async def upload_data(request: Request, file: UploadFile, soni_type: str | None 
     Function for the user to upload their own data to the system, which is then written
     to the tmp directory. The maximum file size is 10mb (this is set in nginx).
 
-    - **upload**: The user-uploaded data file and (optionally) the sonification type.
-    - Returns: The filepath of the saved data file.
+    - **request**: The HTTP connection, used to log the IP address of the upload attempt
+    - **file**: The user-uploaded data file
+    - **soni_type**: Optionally, the sonification type (if this is imported data from the Suite). 
+    This is then used to validate that the data is of the correct sonification type.
+    
+    Returns:
+    - **file_ref**: The reference to the uploaded file
+    - **import_info**: If this is an import, the info contains the data name, 
+    and often values needed to set up the refine page (e.g. number of stars, max magnitude, etc.).
+    If not an import, this is None. 
+    
     """
 
 
@@ -675,6 +684,11 @@ def validate_import(file_contents: bytes, soni_type: str, filename: str):
             if 'custom_order' in df.columns
             else None
         )
+    
+    # TEMPLATE (for developer use)
+    elif soni_type == 'template':
+        # Add things you want to set up your refine menu here
+        pass
         
     session_id = session_id_var.get()
     file_name = f'{soni_type}.csv'

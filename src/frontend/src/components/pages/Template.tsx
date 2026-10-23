@@ -16,11 +16,11 @@ To use this,
 
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { LuFilm, LuTelescope } from "react-icons/lu";
+import { LuTelescope } from "react-icons/lu";
 import PageContainer from "../ui/PageContainer";
 import { getImage, randomRange } from "../../utils/assets";
 import { coreAPI, templateAPI } from "../../apiConfig";
-import { SuggestedData } from "./Lightcurves";
+import { SuggestedData } from "../../types/suggestedData";
 
 import {
   Box,
@@ -49,13 +49,55 @@ interface ListItem {
 }
 
 export default function Template() {
+  /*
+    The soniType is the name of the sonification/data type, and is used throughout the app 
+    to customise the workflow to that specific type.
+    
+    For instance, if the soniType is 'constellations' or 'night_sky', we enforce Discrete data mode 
+    in the custom style menu. On the Sonify page, the place on dome feature only appears if the soniType 
+    is 'light_curves' or 'constellations' etc.
+
+    The current list of soniTypes is as follows (and these are consistent with the SONI_TYPE constants 
+    used in the backend): 'light_curves', 'constellations', 'night_sky', 'data_composer'.
+
+    Here we use 'template', but you should swap this out for 'exoplanets', 'black_holes', etc.
+   */
   const soniType = "template";
 
+  // Navigate function - this must be instatiated in order to navigate to different pages/components
   const navigate = useNavigate();
 
+  /*************** States ***************/
+  /*
+    State is a core concept in React. It is what makes it 'reactive'. States are used to 
+    store dynamic data that can change over time based on user interactions, API responses, 
+    or system events. When a state variable changes, React automatically re-renders the 
+    component to update the user interface. It's like a local variable, but one that tells 
+    the browser to instantly refresh what is on the screen whenever it changes.
+
+    We don't use many states in this component, but a quick look at e.g. LightCurves.tsx will 
+    show you the extent of things they can be used for. For example, it is often handy to create 
+    loading states with booleans: user clicks 'Save' -> handleClickSave() function is called -> 
+    the function starts with setLoading(true) -> this renders a loading spinner -> the handler 
+    function then proceeds to call the API/save the data etc before ending with setLoading(false), 
+    which stops the loading spinner.
+
+    To create a state, use a hook called useState (import this from react).
+    It breaks down into three parts:
+    
+    1. The Variable (e.g. loading): Holds the current value.
+    2. The Setter (e.g. setLoading): The function to change the value.
+    3. The Initial Value (e.g. false): The starting value passed into useState().
+
+    e.g. const [loading, setLoading] = useState(false)
+
+    You will sometimes see the type passed in the <> brackets, this is needed when the type can't 
+    be inferred from the initial value. Like below, we have a state for the list of suggested data 
+    items. We initialise it with an empty array, but we make it explicit with the <> that this is 
+    an array of SuggestedData.
+*/
   const [suggested, setSuggested] = useState<SuggestedData[]>([]);
   const [listItems, setListItems] = useState<ListItem[]>([]);
-
   const [importErrorMessage, setImportErrorMessage] = useState("");
 
   /*************** UseEffects ***************/
@@ -97,7 +139,6 @@ export default function Template() {
       });
   }, []); // <-- empty dependency array
 
-
   /*************** Handlers ***************/
   /* 
     Unlike UseEffects, which are special functions (hooks) unique to React,
@@ -109,42 +150,69 @@ export default function Template() {
   */
 
   const handleSelectListItem = async (item: ListItem) => {
-
     // Here we imagine that this api request downloads the chosen data in the backend and returns the file ref
-    const url = `${templateAPI}/select-item/`
+    const url = `${templateAPI}/select-item/`;
     const payload = {
-      item: item.value
-    }
+      item: item.value,
+    };
 
-    // apiRequest is a function I made to reduce repetitive boilerplate code for each API request
-    const response = await apiRequest(url, payload)
+    // apiRequest is a function I made to reduce repetitive boilerplate code for each API call
+    const response = await apiRequest(url, payload);
 
+    // This NavigationState object is what gets passed between each frontend component when we navigate.
+    // In other words, this is what gets 'remembered' between pages (very important!).
     const state: NavigationState = {
-      dataRef: response.file_ref,
-      dataName: item.label,
+      sourceDataRef: response.file_ref, // The returned file reference in the backend
+      /**
+       * Note that here we pass 'sourceDataRef', but from the Refine page onwards, we use 'dataRef'.
+       * This is so that when navigating to Refine, we always load the original (unrefined) dataset.
+       * After clicking 'apply' on the Refine page, dataRef is updated with the reference to the refined
+       * dataset, so if we just pass dataRef: response.file_ref here, a user navigating back to refine will
+       * always see their refined dataset (and won't be able to 'unrefine' it).
+       */
+
+      dataName: item.label, // The nicely formatted name of the data to be displayed throughout the frontend
       soniType, // shorthand for soniType: soniType
+    };
+
+    // Navigate to the /refine route, which is configured in App.tsx to render the Refine.tsx component
+    navigate("../refine", { state }); // includes the state object
+  };
+
+  const handleSelectSuggested = (item: SuggestedData) => {
+    // Suggested data is already downloaded in the backend, so no need for the api call
+    const state: NavigationState = {
+      sourceDataRef: item.fileRef,
+      dataName: item.name,
+      soniType,
     };
 
     navigate("../refine", { state });
   };
 
-  const handleSelectSuggested = (item: SuggestedData) => {};
-
+  // This handler is called if/when a user successfully 'imports' a previously downloaded dataset of this soniType
   const handleImportSuccess = (result: ImportResult) => {
+    /**
+     * When importing data, the /upload-data/ endpoint returns a dictionary called import_info.
+     * This contains the data name, and (for constellations and night sky) values needed to set up
+     * the refine menu, e.g. number of stars, maximum magnitude, whether it is a custom-ordered
+     * constellation, etc.
+     *
+     * You may want to return something unique to your soni type, depending on what is displayed in
+     * your refine menu. You can do this by adding to the validate_import function in core.py (there is
+     * a template elif branch there already).
+     */
+
     const state: NavigationState = {
       dataName: result.import_info.data_name as string,
       sourceDataRef: result.file_ref,
       soniType,
-      constellationType: result.import_info.stick_figure
-        ? "importedStickFigure"
-        : "importedBoundaries",
-      importedNStars: result.import_info.star_count as number,
-      importedOrder: result.import_info.custom_order as number[],
+      // importedValue: result.import_info.value, for example (you would need to add this to the NavigationState definition)
     };
     navigate("../refine", { state });
   };
 
-  // Needed to use ComboBox search/filter
+  // The following are needed to use the ComboBox search/filter
   const { contains } = useFilter({ sensitivity: "base" });
   const [searchValue, setSearchValue] = useState("");
 
@@ -158,14 +226,35 @@ export default function Template() {
     [filteredItems],
   );
 
+  /**
+   * The following section is called the TSX (or JSX if using JavaScript).
+   * This is what is visually rendered to the browser.
+   *
+   * Each item in a <> tag is called a component. The vast majority of the ones used in the app
+   * come from the ChakraUI v3 library. You can also use raw HTML here (you can see we use <br />
+   * as a line break to create some space). In fact, all of these components will be HTML elements
+   * at their core (e.g. <div>, <p>, <h1>, etc.), but they have just been uniquely styled and abstracted
+   * to these more simple components.
+   *
+   * Some of them are Suite-specific components, made to be reusable across the app. For instance,
+   * PageContainer is the outer perimeter of the UI, which contains the header and footer etc.
+   *
+   * Each component can take parameters (called props in React) which can tweak how things are displayed.
+   * You can also pass functions in as props (including the setter from the useState), like we do below in
+   * the DataImport component. Passing in the function means we can call the function from inside the child
+   * component.
+   *
+   */
   return (
     <PageContainer>
       <Heading as="h1" wordBreak="normal" overflowWrap="normal">
-        Constellations
+        Template
       </Heading>
       <br />
       <HStack gap={0}>
-        <Text>Search for a star pattern, pick a suggestion, or</Text>
+        {" "}
+        {/* HStack is a horizontal stack - everything in a HStack will display in a row */}
+        <Text>Search for an item, pick a suggestion, or</Text>
         <DataImport
           soniType={soniType}
           onImportSuccess={handleImportSuccess}
@@ -175,29 +264,30 @@ export default function Template() {
       <br />
       <br />
       <Box display="flex" justifyContent="center">
+        {/* This is the dropdown component. ChakraUI components often have multiple parts 
+          like this, with the '.Root' being the parent.*/}
         <Combobox.Root
-          aria-label="Search constellations and asterisms"
-          collection={collection}
-          onInputValueChange={(e) => setSearchValue(e.inputValue)}
+          aria-label="Search data items" // ARIA labels are important for accessibility - they are read out by screen readers
+          collection={collection} // This is the collection of items (in this case they are filtered above)
+          onInputValueChange={(e) => setSearchValue(e.inputValue)} // This runs when something changes in the input, e.g. a letter is typed
           onValueChange={(details) => {
-            if (details.value.length > 0) {
-              const selectedItem = patternItems.find(
-                (item) => item.value === details.value[0],
-              );
+            // This runs when a user clicks on an item in the list
 
-              if (selectedItem) {
-                setTimeout(() => {
-                  handleSelectPattern(selectedItem);
-                }, 20);
-              }
+            // Match the selected item to the one in our listItems array
+            const selectedItem = listItems.find(
+              (item) => item.value === details.value[0],
+            );
+
+            if (selectedItem) {
+              handleSelectListItem(selectedItem); // Run the handler
             }
           }}
-          width={{ base: "100%", md: "50%" }}
+          width={{ base: "100%", md: "50%" }} // This syntax is used to apply a different option for each viewport size (base is mobile, md is medium screens like tablets/laptops and above)
           maxWidth="600px"
         >
           <Combobox.Control>
             <InputGroup startElement={<LuTelescope size="1.1rem" />}>
-              <Combobox.Input placeholder="Search for a constellation or asterism" />
+              <Combobox.Input placeholder="Search for an item" />
             </InputGroup>
             <Combobox.IndicatorGroup>
               <Combobox.ClearTrigger />
@@ -208,39 +298,28 @@ export default function Template() {
             <Combobox.Positioner>
               <Combobox.Content>
                 <Combobox.Empty>No items found</Combobox.Empty>
-                {(["Constellations", "Asterisms"] as const).map((category) => {
-                  const itemsInCategory = collection.items.filter(
-                    (item) => item.category === category,
-                  );
-                  if (itemsInCategory.length === 0) return null;
-                  return (
-                    <Combobox.ItemGroup key={category}>
-                      <Combobox.ItemGroupLabel
-                        fontWeight="bold"
-                        fontSize="xs"
-                        color="teal.500"
-                        textTransform="uppercase"
-                        letterSpacing="widest"
-                        pt={2}
-                        pb={1}
-                      >
-                        {category}
-                      </Combobox.ItemGroupLabel>
-                      {itemsInCategory.map((item) => (
-                        <Combobox.Item item={item} key={item.value}>
-                          {item.label}
-                          <Combobox.ItemIndicator />
-                        </Combobox.Item>
-                      ))}
-                    </Combobox.ItemGroup>
-                  );
-                })}
+
+                {collection.items.map(
+                  (
+                    item, // Here we map each item in our collection to a Combobox.Item, displaying the label
+                  ) => (
+                    <Combobox.Item item={item} key={item.value}>
+                      {item.label}
+                      <Combobox.ItemIndicator />
+                    </Combobox.Item>
+                  ),
+                )}
               </Combobox.Content>
             </Combobox.Positioner>
           </Portal>
         </Combobox.Root>
       </Box>
       <br />
+      {/* Below is an example of conditional rendering in React. We use the logical AND operator (&&)
+       to check if the importErrorMessage is empty (defaults to "" when we created the state), and renders
+       the error message if not. Strictly speaking, this is usually used to evaluate if the condition on the 
+       left of the && is true (boolean), but because an empty string in javaScript is 'falsy', it works the same.
+      */}
       {importErrorMessage && (
         <Box width="fit-content" maxW="100%" mx="auto" mt={3}>
           <ErrorMsg
@@ -249,30 +328,6 @@ export default function Template() {
           />
         </Box>
       )}
-      <Alert.Root
-        colorPalette="teal"
-        size="sm"
-        width="fit-content"
-        mb={2}
-        mx="auto"
-        animation="fade-in 300ms ease-out"
-      >
-        <Alert.Indicator>
-          <LuFilm />
-        </Alert.Indicator>
-        <Alert.Content color="fg">
-          <Alert.Title>
-            <Link
-              href="https://colab.research.google.com/github/Audio-Universe/sonified-night-sky/blob/main/StarsAppearingConstellationColab.ipynb"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Try our Google Colab tool to create an audio-visual Constellation
-              →
-            </Link>
-          </Alert.Title>
-        </Alert.Content>
-      </Alert.Root>
       <br />
       <Box animation="fade-in 300ms ease-out">
         <Heading size="2xl" as="h2">
@@ -283,9 +338,10 @@ export default function Template() {
           gap="4"
           direction="row"
           wrap="wrap"
-          justify={{ base: "center", md: "flex-start" }}
-          animation="fade-in 300ms ease-out"
+          justify={{ base: "center", md: "flex-start" }} // More mobile display - on PC the cards are left-aligned, on mobile they are centered
+          animation="fade-in 300ms ease-out" // Small fade-in animation
         >
+          {/* Below are the suggested data items, each one in a card */}
           {suggested.map((suggestion) => (
             <Card.Root
               width="200px"
@@ -296,13 +352,7 @@ export default function Template() {
               cursor="pointer"
               as="button"
               aria-label={`Sonify ${suggestion.name}`}
-              onClick={() =>
-                handleSelectPattern({
-                  label: suggestion.name,
-                  value: suggestion.name,
-                  category: suggestion.category,
-                })
-              }
+              onClick={() => handleSelectSuggested(suggestion)}
             >
               <Box
                 position="relative"
@@ -311,16 +361,19 @@ export default function Template() {
                 overflow="hidden"
               >
                 <img
-                  src={getImage(suggestion.name, ".svg")}
-                  alt={`Outline of the ${suggestion.name} constellation, overlaid with its associated mythological figure.`}
+                  src={getImage(suggestion.name, ".svg")} // This is a custom function to grab the '{suggestion.name}.svg' image from our /assets directory
+                  alt={`A template image for ${suggestion.name}`} // You should provide alt text for all images, as this is read out by screen readers
                   style={{
                     width: "100%",
                     display: "block",
                     borderRadius: "8px",
-                    animation: `twinkle ${randomRange(2, 3)}s infinite alternate`,
+                    animation: `twinkle ${randomRange(2, 3)}s infinite alternate`, // This is the animation we use throughout to give each icon a uniquely timed twinkle effect
                   }}
                 />
               </Box>
+
+              {/* The card body contains the data name as a title, and the description, 
+              which you should add in the backend /suggested_data/template/ yaml files */}
               <Card.Body>
                 <Card.Title mb="2">{suggestion.name}</Card.Title>
                 <Card.Description>{suggestion.description}</Card.Description>
@@ -330,18 +383,6 @@ export default function Template() {
         </Stack>
         <br />
       </Box>
-      <Text textAlign="center" fontSize="sm" color="fg.muted" mt={4}>
-        Image credit:{" "}
-        <Link
-          href="https://noirlab.edu"
-          color="gray.400"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          NSF NOIRLab
-        </Link>{" "}
-        (CC BY 4.0)
-      </Text>
     </PageContainer>
   );
 }

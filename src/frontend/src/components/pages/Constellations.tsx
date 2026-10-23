@@ -4,7 +4,7 @@ import { LuFilm, LuTelescope } from "react-icons/lu";
 import PageContainer from "../ui/PageContainer";
 import { getImage, randomRange } from "../../utils/assets";
 import { coreAPI, constellationsAPI } from "../../apiConfig";
-import { SuggestedData } from "./Lightcurves";
+import { SuggestedData } from "../../types/suggestedData";
 
 import {
   Box,

@@ -56,6 +56,7 @@ import {
 import { NavigationState } from "../../types/navigation";
 import { capitaliseWords } from "../../utils/formatting";
 import { DataImport, ImportResult } from "../utils/DataImport";
+import { SuggestedData } from "../../types/suggestedData";
 
 export interface Lightcurve {
   id: string;
@@ -65,15 +66,6 @@ export interface Lightcurve {
   year: number;
   period: string;
   dataURI: string;
-}
-
-export interface SuggestedData {
-  name: string;
-  description: string;
-  ra: number;
-  dec: number;
-  fileRef: string;
-  category: string;
 }
 
 export default function Lightcurves() {
