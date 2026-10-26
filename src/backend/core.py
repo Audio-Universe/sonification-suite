@@ -783,13 +783,10 @@ def get_suggested(soni_type: str):
         except Exception as e:
             print(f'Failed to read or parse {file}: {e}')
             continue
+        
+        filename = 'hyg.csv' if soni_type == 'constellations' else str(file.stem) + '.csv'
 
-        filenames = {
-            'light_curves': str(file.stem) + '.csv',
-            'constellations': 'hyg.csv'
-        }
-
-        file_ref = f'suggested_data:{soni_type}:{filenames[soni_type]}'
+        file_ref = f'suggested_data:{soni_type}:{filename}'
 
         data = {'name': name,
                 'description': desc,
