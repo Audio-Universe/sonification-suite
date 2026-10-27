@@ -10,7 +10,17 @@ to enter a search query which is sent to the backend to connect to a 3rd party d
 the case of light curves, using the lightkurve package). Either way, this template contains most
 of the skeleton of a sonification type (you just need to add the specific organs you want!).
 
-To use this, 
+Places to update 'template':
+Frontend:
+  Template.tsx
+  App.tsx
+  Planetaria.tsx
+  template.tsx (in /refine_menus)
+
+Backend:
+  template.py
+  main.py (where you import/include the router)
+  /suggested_data
 
 */
 
@@ -153,7 +163,7 @@ export default function Template() {
     // Here we imagine that this api request downloads the chosen data in the backend and returns the file ref
     const url = `${templateAPI}/select-item/`;
     const payload = {
-      item: item.value,
+      item_name: item.value,
     };
 
     // apiRequest is a function I made to reduce repetitive boilerplate code for each API call

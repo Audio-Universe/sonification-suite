@@ -1,75 +1,93 @@
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter
 from pydantic import BaseModel
-from pathlib import Path
-from paths import TMP_DIR, STYLE_FILES_DIR, SUGGESTED_DATA_DIR, SAMPLES_DIR
+from paths import TMP_DIR
 from context import session_id_var
-import logging, requests, os, base64, hashlib, json, gc, threading, time
+import base64, gc
 
 import numpy as np
-import asyncio
 import matplotlib
 matplotlib.use("Agg") 
 from matplotlib.figure import Figure
 import pandas as pd
 from io import BytesIO
-from scipy.ndimage import gaussian_filter1d
-from request_models import StarQuery, DataRequest, DownloadRequest, PlotRequest, RefineRequest
-from utils import resolve_file, is_number
-
+from request_models import DataRequest, RefineRequest
+from utils import resolve_file
 
 router = APIRouter(prefix='/template')
 
 SONI_TYPE = 'template'
 
-STYLES_DIR = STYLE_FILES_DIR / SONI_TYPE
-STARS_DIR = SUGGESTED_DATA_DIR / SONI_TYPE
-
 class ItemRequest(BaseModel):
-    item: str
+    """
+    This is a request model we create for the /select-item/ endpoint.
+    It is best practice in fastAPI to define one for every type of request you might make, 
+    so that it is clear what the frontend should send, and what the backend should expect.
+    
+    To make one, define a class that inherits from pydantic's BaseModel class, then define 
+    attributes with names and expected data types.
+    
+    The rest of the api endpoints here use request models from elsewhere in the app, which 
+    are all defined in request_models.py - I would recommend putting any you make in there too.
+    """
+    item_name: str
+    
+    
+@router.get('/list/')
+def get_data_list():
+    """
+    Here you would presumably have your own endpoint for getting/returning the list of available data. 
+    This might be a search function (like in light_curves.py), in which case you would want to make this 
+    a POST request (use fastAPI's @router.post decorator instead of @router.get) so that you could send 
+    a search query and some filters in the request.
+
+    Here we just generate and return a list of data names as a placeholder.
+    """
+    
+    return [f'Item {i+1}' for i in range(10)]
 
 @router.post('/plot/')
-def plot_lightcurve(request: DataRequest):
-    """
-    Download the target light curve (if not already downloaded) and convert it to a png image.
-    This function saves the plot to the memory buffer, to increase speed and avoid saving multiple images to disk.
+def plot_item(request: DataRequest):
+   
+    filepath = resolve_file(request.file_ref)
 
-    - **request**: The URI (or file ref) of the light curve.
-    - Returns: The image as a base64 string.
-    """
-
-    # Check if the requested light curve is from a search (with data URI) or a local file.
-    if (request.file_ref.startswith('mast:')):
-
-        filepath = download_lightcurve(request.file_ref)
-    else:
-        filepath = resolve_file(request.file_ref)
-
-    img_base64 = plot_and_format_lc(str(filepath))
+    img_base64 = plot_and_format(str(filepath))
 
     return {'image': img_base64}
 
 
-def plot_and_format_lc(path_or_df: str | pd.DataFrame):
+def plot_and_format(path_or_df: str | pd.DataFrame):
     
     df = pd.read_csv(path_or_df) if isinstance(path_or_df, str) else path_or_df
 
-    time = df['time'].values
-    flux = df['flux'].values  
+    x = df['x'].values
+    y = df['y'].values
+    z = df['z'].values  
 
     # Plot and format
     fig = Figure(figsize=(6, 4))
     ax = fig.add_subplot(111)
 
     ax.plot(
-        time,
-        flux,
+        x,
+        y,
         color="#008080",
         linewidth=1.2,
-        alpha=0.9
+        alpha=0.9,
+        label="Y"
     )
-    
-    ax.set_xlabel('Time (Days)')
-    ax.set_ylabel('Brightness (Flux)')
+
+    ax.plot(
+        x,
+        z,
+        color="#003E8A",
+        linewidth=1.2,
+        alpha=0.9,
+        label="Z"
+    )
+
+    ax.set_xlabel("X")
+    ax.set_ylabel("Y / Z")
+    ax.legend()
 
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
@@ -87,10 +105,39 @@ def plot_and_format_lc(path_or_df: str | pd.DataFrame):
     return img_base64
 
 @router.post('/select-item/')
-def select_item(request: DataRequest):
-
-    filepath = Path(download_lightcurve(request.data_uri))
-    file_ref = f'session:{filepath.name}'
+def select_item(request: ItemRequest):
+    """
+    This is a placeholder endpoint where you may want to download the chosen 
+    dataset to CSV (if the user hasn't chosen a suggested dataset). 
+    
+    How you do this and where the data comes from is up to you, but the key thing 
+    is to ensure the data is written to CSV format in the user's unique session directory. 
+    This directory is automatically created when a new user connects (in core.py /session/), 
+    so you just need to get the session ID and write the data to the corresponding directory.
+    
+    In this placeholder, we just generate a random CSV file for whichever item is chosen.
+    """
+    
+    filename = f'{request.item_name}.csv'
+    
+    # Get session id from context variable
+    session_id = session_id_var.get()
+    filepath = TMP_DIR / session_id / filename
+    
+    # Generate random data using the item number as the seed (reproducible)
+    seed = int(request.item_name.split(" ")[1])
+    rng = np.random.default_rng(seed)
+    
+    df = pd.DataFrame({
+                        'x': range(20), 
+                        'y': rng.integers(0, 100, size=20), 
+                        'z': rng.integers(0, 100, size=20) 
+                    })
+     
+    # Write the data to CSV 
+    df.to_csv(filepath, index=False)
+    
+    file_ref = f'session:{filename}'
     
     return {'file_ref': file_ref}
 
@@ -126,7 +173,7 @@ def preview_refined(request: RefineRequest):
     refined = refine(request)
        
     # Plot, format, and convert image to Base64
-    img_base64 = plot_and_format_lc(refined)
+    img_base64 = plot_and_format(refined)
 
     return{'image': img_base64}
 

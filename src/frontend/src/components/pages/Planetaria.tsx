@@ -41,6 +41,11 @@ const astroTypes: AstroType[] = [
     page: "night-sky",
   },
   {
+    name: "Template",
+    description: "Your description here!",
+    page: "template",
+  },
+  {
     name: "Data Composer",
     description: "Upload your own data and compose sonifications in layers.",
     page: "/data-composer",

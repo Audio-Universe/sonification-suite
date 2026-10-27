@@ -10,12 +10,16 @@ import Planetaria from "./components/pages/Planetaria";
 import Landing from "./components/pages/Landing";
 import Refine from "./components/pages/Refine";
 import Constellations from "./components/pages/Constellations";
-import DataComposer from "./components/pages/DataComposer";
-import { useEffect, useState, useRef } from "react";
-import { coreAPI } from "./apiConfig";
 import NightSky from "./components/pages/NightSky";
+import Template from "./components/pages/Template";
+import DataComposer from "./components/pages/DataComposer";
+import { coreAPI } from "./apiConfig";
 import { ComposerProvider } from "./context/ComposerContext";
 import ScrollToTop from "./utils/ScrollToTop";
+
+import { useEffect, useState, useRef } from "react";
+
+
 
 function App() {
   const [sessionReady, setSessionReady] = useState(false);
@@ -55,6 +59,7 @@ function App() {
                 <Route path="light-curves" element={<Lightcurves />} />
                 <Route path="constellations" element={<Constellations />} />
                 <Route path="night-sky" element={<NightSky />} />
+                <Route path="template" element={<Template />} />
                 <Route path="refine" element={<Refine />} />
                 <Route path="style" element={<Style />} />
                 <Route path="sonify" element={<Sonify />} />
