@@ -798,6 +798,8 @@ def get_suggested(soni_type: str):
 
         data_list.append(data)
         
+    print(data_list)
+        
     return data_list
 
 @router.get('/styles/{soni_type}')

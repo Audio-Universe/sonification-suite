@@ -15,19 +15,19 @@ import { RefineMenuProps } from "../../types/refine_menu";
 import { useState, useEffect, useMemo, useCallback } from "react";
 import LoadingMessage from "../ui/LoadingMessage";
 import ErrorMsg from "../ui/ErrorMsg";
-import { lightCurvesAPI } from "../../apiConfig";
+import { templateAPI } from "../../apiConfig";
 import { apiRequest } from "../../utils/requests";
 import { InfoTip } from "../ui/ToggleTip";
 import { LuArrowRight } from "react-icons/lu";
 import { plotData } from "../../utils/plot";
 import { debounce, fill } from "es-toolkit";
-import NaNHandler, { NanStrategy } from "../ui/NaNHandler";
 
-export default function LightCurves({
+export default function Template({
   dataName,
   dataRef,
   onApply,
 }: RefineMenuProps) {
+
   const [imageSrc, setImageSrc] = useState<string | null>(null);
   const [imageLoading, setImageLoading] = useState(true);
 
@@ -48,7 +48,7 @@ export default function LightCurves({
     let mounted = true;
     async function fetchPlot() {
       try {
-        const base64 = await plotData(dataRef, "light_curves");
+        const base64 = await plotData(dataRef, "template");
         if (!mounted) return;
         setImageSrc(`data:image/svg+xml;base64,${base64}`);
       } catch (err) {
@@ -63,16 +63,17 @@ export default function LightCurves({
     };
   }, [dataRef]);
 
-  // fetch cropRange and do NaN check on first load
+  // fetch cropRange on first load
   useEffect(() => {
     if (!dataRef) return;
 
     let mounted = true;
-    async function fetchRangeAndNans() {
-      const endpoint = `${lightCurvesAPI}/get-range-and-nans/`;
+    async function fetchRange() {
+      
       try {
+        const endpoint = `${templateAPI}/get-range/`;
         const payload = { file_ref: dataRef };
-        const result = await apiRequest(endpoint, payload, "POST");
+        const result = await apiRequest(endpoint, payload);
 
         if (
           mounted &&
@@ -87,22 +88,14 @@ export default function LightCurves({
           setCropValues(r);
           setStartText(String(r[0]));
           setEndText(String(r[1]));
-
-          setHasNans(result.has_nans);
           setSlidersLoading(false);
-
-          // Make sure NaNs are handled in the plot from the start
-          if (result.has_nans) {
-            fetchPreviewPlot(r, sigma, nanStrategy, fillWith);
-            setNanHandled(true);
-          }
         }
       } catch (error) {
-        console.error("Error fetching x-axis range:", error);
+        console.error("Error fetching range: ", error);
         setSlidersLoading(false);
       }
     }
-    fetchRangeAndNans();
+    fetchRange();
     return () => {
       mounted = false;
     };
@@ -120,29 +113,22 @@ export default function LightCurves({
   const fetchPreviewPlot = useCallback(
     async (
       range: [number, number] | null,
-      sigmaVal: number,
-      nanStrategy: NanStrategy,
-      fillWith: string,
     ) => {
       if (!range) return;
       setImageLoading(true);
 
-      const endpoint = `${lightCurvesAPI}/preview-refined/`;
+      const endpoint = `${templateAPI}/preview-refined/`;
       const payload = {
         data_name: dataName,
         file_ref: dataRef,
         new_range: range,
-        sigma: sigmaVal,
-        nan_strategy: nanStrategy,
-        fill_with: fillWith,
       };
 
       try {
         const result = await apiRequest(endpoint, payload);
         setImageSrc(`data:image/svg+xml;base64,${result.image}`);
-        setHasNans(result.nans_after_trim);
       } catch (err) {
-        console.error("Error previewing plot:", err);
+        console.error("Error previewing plot: ", err);
       } finally {
         setImageLoading(false);
       }
@@ -165,14 +151,11 @@ export default function LightCurves({
   const handleClickApply = async () => {
     setApplyLoading(true);
 
-    const endpoint = `${lightCurvesAPI}/save-refined/`;
+    const endpoint = `${templateAPI}/save-refined/`;
     const payload = {
       data_name: dataName,
       file_ref: dataRef,
       new_range: cropValues,
-      sigma: sigma,
-      nan_strategy: nanStrategy,
-      fill_with: fillWith,
     };
 
     const result = await apiRequest(endpoint, payload);
@@ -184,26 +167,13 @@ export default function LightCurves({
     setApplyLoading(false);
   };
 
-  const handleNanStrategyChange = (strategy: NanStrategy) => {
-    setNanStrategy(strategy);
-    fetchPreviewPlot(cropValues, sigma, strategy, fillWith);
-  };
-
-  const handleFillWithChange = (value: string) => {
-    setFillWith(value);
-    fetchPreviewPlot(cropValues, sigma, nanStrategy, value);
-  };
-
   const slidersMoved =
     cropValues && cropRange
       ? cropValues![0] == cropRange![0] &&
-        cropValues![1] == cropRange![1] &&
-        sigma == 0
+        cropValues![1] == cropRange![1]
         ? false
         : true
       : false;
-
-  const applyButtonOn = slidersMoved || nanHandled;
 
   // Apply button component separate to TSX as we use it in different places depending on viewport size
   const applyButton = !slidersLoading ? (
@@ -218,9 +188,9 @@ export default function LightCurves({
         colorPalette="teal"
         loading={applyLoading}
         loadingText="Saving..."
-        variant={applyButtonOn ? "solid" : "surface"}
+        variant={slidersMoved ? "solid" : "surface"}
       >
-        {applyButtonOn ? "Apply & Continue" : "Skip"} <LuArrowRight />
+        {slidersMoved ? "Apply & Continue" : "Skip"} <LuArrowRight />
       </Button>
     </HStack>
   ) : (
@@ -260,12 +230,7 @@ export default function LightCurves({
                       );
                       setCropValues(([_, end]) => [clamped, end]);
                       setStartText(String(clamped));
-                      fetchPreviewPlot(
-                        [clamped, cropValues[1]],
-                        sigma,
-                        nanStrategy,
-                        fillWith,
-                      );
+                      fetchPreviewPlot([clamped, cropValues[1]]);
                     } else {
                       setStartText(String(cropValues[0]));
                     }
@@ -292,12 +257,7 @@ export default function LightCurves({
                       );
                       setCropValues(([start, _]) => [start, clamped]);
                       setEndText(String(clamped));
-                      fetchPreviewPlot(
-                        [cropValues[0], clamped],
-                        sigma,
-                        nanStrategy,
-                        fillWith,
-                      );
+                      fetchPreviewPlot([cropValues[0], clamped]);
                     } else {
                       setEndText(String(cropValues[1]));
                     }
@@ -326,12 +286,7 @@ export default function LightCurves({
                   setCropValues(e.value as [number, number]);
                   setStartText(String(e.value[0]));
                   setEndText(String(e.value[1]));
-                  debouncedFetchPreviewPlot(
-                    e.value as [number, number],
-                    sigma,
-                    nanStrategy,
-                    fillWith,
-                  );
+                  debouncedFetchPreviewPlot(e.value as [number, number]);
                 }}
               >
                 <Slider.Control>
@@ -347,54 +302,6 @@ export default function LightCurves({
             <Box width="100%">
               <Skeleton height="4em" />
             </Box>
-          )}
-          {!slidersLoading ? (
-            <Slider.Root
-              w="100%"
-              colorPalette="teal"
-              min={0}
-              max={10}
-              value={[sigma]}
-              animation="fade-in 300ms ease-out"
-              onValueChange={(e) => {
-                setSigma(e.value[0]);
-                debouncedFetchPreviewPlot(
-                  cropValues,
-                  e.value[0],
-                  nanStrategy,
-                  fillWith,
-                );
-              }}
-            >
-              <HStack>
-                <Slider.Label textStyle="md">Smoothing Factor</Slider.Label>
-                <InfoTip
-                  content="This is the standard deviation to give to a Gaussian filter, removing noise from the signal."
-                  positioning={{ placement: "top" }}
-                />
-                <Code textStyle="md" ml="auto">
-                  {sigma}
-                </Code>
-              </HStack>
-              <Slider.Control>
-                <Slider.Track>
-                  <Slider.Range />
-                </Slider.Track>
-                <Slider.Thumbs />
-              </Slider.Control>
-            </Slider.Root>
-          ) : (
-            <Box width="100%">
-              <Skeleton height="4em" />
-            </Box>
-          )}
-          {hasNans && (
-            <NaNHandler
-              strategy={nanStrategy}
-              onStrategyChange={handleNanStrategyChange}
-              fillWith={fillWith}
-              onFillWithChange={handleFillWithChange}
-            />
           )}
           <Box hideBelow="md" width="100%">
             {applyButton}

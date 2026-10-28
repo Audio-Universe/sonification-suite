@@ -74,7 +74,6 @@ class PlotRequest(BaseModel):
     new_range: list[int]
 
 class RefineRequest(BaseModel):
-    data_name: str
     file_ref: str
     new_range: list[float]
     sigma: int

@@ -2,6 +2,7 @@ import { Fragment } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Breadcrumb, Box } from "@chakra-ui/react";
 import { NavigationState } from "../../types/navigation";
+import { astroTypes } from "../pages/Planetaria";
 
 const DATA_TYPES = [
   {

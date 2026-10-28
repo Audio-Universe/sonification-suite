@@ -10,7 +10,7 @@ matplotlib.use("Agg")
 from matplotlib.figure import Figure
 import pandas as pd
 from io import BytesIO
-from request_models import DataRequest, RefineRequest
+from request_models import DataRequest
 from utils import resolve_file
 
 router = APIRouter(prefix='/template')
@@ -30,6 +30,15 @@ class ItemRequest(BaseModel):
     are all defined in request_models.py - I would recommend putting any you make in there too.
     """
     item_name: str
+    
+class RefineRequest(BaseModel):
+    """
+    This is the request type for refining the data.
+    In this simplified template, it just sends the file reference, and the new x-axis 
+    range to trim the data to.
+    """
+    file_ref: str
+    new_range: list[float]
     
     
 @router.get('/list/')

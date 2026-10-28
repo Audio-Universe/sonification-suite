@@ -16,6 +16,7 @@ Frontend:
   App.tsx
   Planetaria.tsx
   template.tsx (in /refine_menus)
+  apiConfig.ts
 
 Backend:
   template.py
@@ -124,7 +125,13 @@ export default function Template() {
     fetch(`${coreAPI}/suggested-data/${soniType}/`)
       .then((res) => res.json())
       .then((data) => {
-        setSuggested(data);
+        const mapped: SuggestedData[] = data.map((item: any) => ({
+          name: item.name,
+          description: item.description,
+          fileRef: item.file_ref,
+        }));
+
+        setSuggested(mapped);
       })
       .catch((err) => {
         console.error("Failed to fetch suggested data:", err);
