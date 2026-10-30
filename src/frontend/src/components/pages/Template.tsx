@@ -10,19 +10,6 @@ to enter a search query which is sent to the backend to connect to a 3rd party d
 the case of light curves, using the lightkurve package). Either way, this template contains most
 of the skeleton of a sonification type (you just need to add the specific organs you want!).
 
-Places to update 'template':
-Frontend:
-  Template.tsx
-  App.tsx
-  Planetaria.tsx
-  template.tsx (in /refine_menus)
-  apiConfig.ts
-
-Backend:
-  template.py
-  main.py (where you import/include the router)
-  /suggested_data
-
 */
 
 import { useEffect, useMemo, useState } from "react";
@@ -35,9 +22,7 @@ import { SuggestedData } from "../../types/suggestedData";
 
 import {
   Box,
-  Alert,
   Card,
-  Link,
   InputGroup,
   Stack,
   Heading,

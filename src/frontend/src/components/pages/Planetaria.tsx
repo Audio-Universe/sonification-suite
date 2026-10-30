@@ -21,44 +21,7 @@ import {
   HStack,
   Badge,
 } from "@chakra-ui/react";
-import { SoniType } from "../../types/soniTypes";
-
-export const astroTypes: SoniType[] = [
-  {
-    soniType: "light_curves",
-    label: "Light Curves",
-    description: "Listen to fluctuations in a star's light.",
-    page: "light-curves",
-    imgAltText: "A NASA image of a binary star system"
-  },
-  {
-    soniType: "constellations",
-    label: "Constellations",
-    description: "Hear the unique qualities of famous star patterns.",
-    page: "constellations",
-    imgAltText: "A photo of the Orion constellation"
-  },
-  {
-    soniType: "night_sky",
-    label: "Night Sky",
-    description: "Hear the stars at your location appear.",
-    page: "night-sky",
-    imgAltText: "An image of a starry night sky, with the shape of the Milky Way visible"
-  },
-  {
-    soniType: "template",
-    label: "Template",
-    description: "Your description here!",
-    page: "template",
-  },
-  {
-    soniType: "data_composer",
-    label: "Data Composer",
-    description: "Upload your own data and compose sonifications in layers.",
-    page: "/data-composer",
-    icon: LuLayers3,
-  },
-];
+import { SoniType, astroTypes } from "../../types/soniTypes";
 
 export default function Planetaria() {
   const navigate = useNavigate();
@@ -83,7 +46,7 @@ export default function Planetaria() {
           return (
             <Card.Root
               width="200px"
-              key={astroType.soniType}
+              key={astroType.key}
               _hover={{ transform: "scale(1.05)" }}
               transition="transform 0.2s ease"
               variant="elevated"
