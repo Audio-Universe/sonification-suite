@@ -1,8 +1,14 @@
 import { ChakraProvider, defaultSystem } from "@chakra-ui/react";
 import { ColorModeProvider } from "./components/ui/color-mode";
 import { Box } from "@chakra-ui/react";
-import ReactDOM from "react-dom/client";
 import { BrowserRouter, Routes, Route, Outlet } from "react-router-dom";
+import { useEffect, useState, useRef } from "react";
+
+import { coreAPI } from "./apiConfig";
+import { ComposerProvider } from "./context/ComposerContext";
+import ScrollToTop from "./utils/ScrollToTop";
+
+// V1 pages
 import Lightcurves from "./components/pages/Lightcurves";
 import Style from "./components/pages/Style";
 import Sonify from "./components/pages/Sonify";
@@ -11,14 +17,10 @@ import Landing from "./components/pages/Landing";
 import Refine from "./components/pages/Refine";
 import Constellations from "./components/pages/Constellations";
 import NightSky from "./components/pages/NightSky";
-import Template from "./components/pages/Template";
 import DataComposer from "./components/pages/DataComposer";
-import { coreAPI } from "./apiConfig";
-import { ComposerProvider } from "./context/ComposerContext";
-import ScrollToTop from "./utils/ScrollToTop";
 
-import { useEffect, useState, useRef } from "react";
-
+// Generated page imports - DO NOT REMOVE THIS COMMENT
+import Template from "./components/pages/Template";
 
 
 function App() {
@@ -63,6 +65,7 @@ function App() {
                 <Route path="refine" element={<Refine />} />
                 <Route path="style" element={<Style />} />
                 <Route path="sonify" element={<Sonify />} />
+                {/* Generated routes - DO NOT REMOVE THIS COMMENT */}
               </Route>
 
               <Route

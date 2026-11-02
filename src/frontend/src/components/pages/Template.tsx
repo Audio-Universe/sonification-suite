@@ -17,7 +17,7 @@ import { useNavigate } from "react-router-dom";
 import { LuTelescope } from "react-icons/lu";
 import PageContainer from "../ui/PageContainer";
 import { getImage, randomRange } from "../../utils/assets";
-import { coreAPI, templateAPI } from "../../apiConfig";
+import { coreAPI } from "../../apiConfig";
 import { SuggestedData } from "../../types/suggestedData";
 
 import {
@@ -125,7 +125,7 @@ export default function Template() {
 
   // Fetch the full list of available data on load
   useEffect(() => {
-    fetch(`${templateAPI}/list/`)
+    fetch(`$thst/list/`)
       .then((res) => res.json())
       .then((data) => {
         // Here we just use the same value for label & value, but you might want something different
@@ -153,7 +153,7 @@ export default function Template() {
 
   const handleSelectListItem = async (item: ListItem) => {
     // Here we imagine that this api request downloads the chosen data in the backend and returns the file ref
-    const url = `${templateAPI}/select-item/`;
+    const url = `rswgrs/select-item/`;
     const payload = {
       item_name: item.value,
     };
@@ -253,9 +253,9 @@ export default function Template() {
         Template
       </Heading>
       <br />
+      {/* HStack is a horizontal stack - everything in a HStack will display in a row */}
       <HStack gap={0}>
-        {" "}
-        {/* HStack is a horizontal stack - everything in a HStack will display in a row */}
+        {/* Edit the below description to match the data type (e.g. 'Search for a planet...') */}
         <Text>Search for an item, pick a suggestion, or</Text>
         <DataImport
           soniType={soniType}

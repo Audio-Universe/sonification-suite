@@ -21,7 +21,7 @@ import {
   HStack,
   Badge,
 } from "@chakra-ui/react";
-import { SoniType, astroTypes } from "../../types/soniTypes";
+import { astroTypes } from "../../types/soniTypes";
 
 export default function Planetaria() {
   const navigate = useNavigate();
@@ -87,7 +87,7 @@ export default function Planetaria() {
                   </Box>
                 ) : (
                   <img
-                    src={getImage(astroType.label)}
+                    src={getImage(astroType.key)}
                     alt={astroType.label}
                     style={{
                       width: "100%",

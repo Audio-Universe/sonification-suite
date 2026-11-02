@@ -32,16 +32,11 @@ export interface SoniType {
       imgAltText: "An image of a starry night sky, with the shape of the Milky Way visible"
     },
     {
-      key: "template",
-      label: "hello",
-      description: "Your description here!",
-      page: "template",
-    },
-    {
       key: "data_composer",
       label: "Data Composer",
       description: "Upload your own data and compose sonifications in layers.",
       page: "/data-composer",
       icon: LuLayers3,
     },
+    // Generated soniTypes - DO NOT REMOVE THIS COMMENT
   ];
