@@ -40,7 +40,7 @@ def generate_landing_page(
 
     output_path.write_text(generated_code, encoding="utf-8")
 
-    print(f"Created: {output_path}")
+    print(f"Created {component_name} landing page: {output_path}")
     
 def add_api_config(soni_type: str, api_variable: str):
     """ Update frontend/src/apiConfig.ts with the new API route address. """
@@ -67,7 +67,7 @@ def add_api_config(soni_type: str, api_variable: str):
 
     path.write_text(content, encoding="utf-8")
     
-    print(f"Updated: {path}")
+    print(f"Added API address in frontend: {path}")
     
 def add_route(soni_type: str, component_name: str):
     """ Add generated landing page component and route to App.tsx """
@@ -108,7 +108,7 @@ def add_route(soni_type: str, component_name: str):
 
     path.write_text(content, encoding="utf-8")
     
-    print(f"Updated: {path}")
+    print(f"Created route to new landing page and added to app: {path}")
     
 def add_api_router(soni_type: str):
     
@@ -147,7 +147,7 @@ def add_api_router(soni_type: str):
 
     path.write_text(content, encoding="utf-8")
     
-    print(f"Updated: {path}")
+    print(f"Added API router to app in backend: {path}")
     
 def add_soni_type_metadata(soni_type: str, label: str, description: str):
     
@@ -174,14 +174,24 @@ def add_soni_type_metadata(soni_type: str, label: str, description: str):
       
       Alternatively, you could use an icon (like the one on the Data Composer 
       card). To do this, import your desired icon from Lucide (the icon names 
-      all start with 'Lu') and then add 'icon: [icon name]' below. It should 
-      render on the Planetaria page using the same colours/animation as the 
-      Data Composer and Suggestions/Examples cards.
+      all start with 'Lu' - see top of this file for example) and then add 
+      'icon: [icon name]' below. It should render on the Planetaria page 
+      using the same colours/animation as the Data Composer and Suggestions/Examples cards.
       */
       imgAltText: "An image of {soni_type}",
     }},'''
-        
     
+    if new_entry in content:
+        raise ValueError(f'Entry for {soni_type} already in {path}')
+    
+    content = content.replace(
+        marker,
+        f"{marker}\n{new_entry}"
+    )
+        
+    path.write_text(content, encoding="utf-8")
+        
+    print(f"Added soniType metadata in frontend: {path}")
 
 
 if __name__ == "__main__":

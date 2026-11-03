@@ -158,6 +158,9 @@ export default function [[ component_name ]]() {
     };
 
     // apiRequest is a function I made to reduce repetitive boilerplate code for each API call
+    /* NOTE - if you look at the apiRequest function, you'll notice we use 'credentials: "include"'
+      in the request. This is needed to make sure that cookies are sent (so we can send the session id).
+    */
     const response = await apiRequest(url, payload);
 
     // This NavigationState object is what gets passed between each frontend component when we navigate.

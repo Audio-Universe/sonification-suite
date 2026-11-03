@@ -20,7 +20,6 @@ from night_sky import router as night_sky_router
 from core import router as core_router
 from data_composer import router as composer_router
 # Generated router imports - DO NOT REMOVE THIS COMMENT
-from template import router as template_router
 
 # fcntl package is only available on unix systems
 if sys.platform != "win32":
