@@ -1,3 +1,14 @@
+"""
+This file contains all the available mapping parameters and their descriptions. This includes both inputs 
+(data variables) and outputs (sound properties). This is used to display the available inputs and outputs (and 
+descriptions of them) in the custom style menu.
+
+Importantly, in the INPUTS dictionary, the keys for each soni_type correspond to the actual column headers in 
+the data files (e.g. ra_corrected, flux, etc.). If you are adding a new sonification type, please make sure the 
+keys you choose match the headers of the columns you want to make available for mapping. They should match the 
+datasets in both suggested data files, and any downloaded data files.
+"""
+
 _MAGNITUDE = {
     'name': 'Magnitude',
     'desc': 'How bright the star appears from Earth (lower values are brighter)'

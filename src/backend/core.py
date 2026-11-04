@@ -649,11 +649,17 @@ async def upload_data(request: Request, file: UploadFile, soni_type: str | None 
 
 
 def validate_import(file_contents: bytes, soni_type: str, filename: str):
+    """ Check that the imported data file is of the expected soni_type by 
+        checking that all of the expected columns are present.
     
+    """
+    
+    # Formatted strings for the error message
     formatted_types = {
         'light_curves': 'light curve',
         'constellations': 'constellation',
-        'night_sky': 'night sky'
+        'night_sky': 'night sky',
+        # Formatted string marker - DO NOT REMOVE THIS COMMENT
     }
     
     if soni_type not in formatted_types.keys():
@@ -665,7 +671,8 @@ def validate_import(file_contents: bytes, soni_type: str, filename: str):
     
     # Check that the basic columns for this soni type are a subset of the imported columns
     if not expected_cols <= set(df.columns):
-        raise HTTPException(status_code=400, detail=f"Imported data appears invalid - are you sure this is a {formatted_types[soni_type]} downloaded from the Suite?")
+        formatted_type = formatted_types.get(soni_type, 'dataset')
+        raise HTTPException(status_code=400, detail=f"Imported data appears invalid - are you sure this is a {formatted_type} downloaded from the Suite?")
 
     import_info= {
         'data_name': filename,
@@ -685,7 +692,7 @@ def validate_import(file_contents: bytes, soni_type: str, filename: str):
             else None
         )
     
-    # TEMPLATE (for developer use)
+    # Import info marker - DO NOT REMOVE THIS COMMENT
     elif soni_type == 'template':
         # Add things you want to set up your refine menu here
         pass

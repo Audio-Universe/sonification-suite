@@ -16,6 +16,27 @@ env = Environment(
     keep_trailing_newline=True,
 )
 
+def generate_api(soni_type: str):
+    """ Generate a basic API module in the backend. """
+    
+    template = env.get_template("api.py.j2")
+    
+    api_route = soni_type.replace('_','-')
+    
+    generated_code = template.render(
+        soni_type=soni_type,
+        api_route=api_route
+    )
+
+    output_path = BACKEND_DIR / f"{soni_type}.py"
+
+    if output_path.exists():
+        raise FileExistsError(f"{output_path} already exists")
+
+    output_path.write_text(generated_code, encoding="utf-8")
+
+    print(f"Created {soni_type} API: {output_path}")
+
 def generate_landing_page(
     component_name: str,
     soni_type: str,
@@ -192,7 +213,39 @@ def add_soni_type_metadata(soni_type: str, label: str, description: str):
     path.write_text(content, encoding="utf-8")
         
     print(f"Added soniType metadata in frontend: {path}")
-
+    
+def update_validate_import(soni_type: str, formatted_soni_type: str):
+    """ Update the validate_import function in core.py with the new soni_type. 
+        This will add a blank 'elif' branch so that you can write custom code to 
+        set up the refine page (in the case that user has imported data). 
+        
+        It will also add the formatted soni_type to display in an error message if 
+        the imported data doesn't seem to be of that soni_type (e.g. "are you sure 
+        this is a ____ downloaded from the Suite?").
+    """
+    
+    path = BACKEND_DIR / "core.py"
+        
+    content = path.read_text(encoding="utf-8")
+    
+    formatted_marker = "# Formatted string marker - DO NOT REMOVE THIS COMMENT"
+    if formatted_marker not in content:
+        raise ValueError(f"Could not find formatted string marker in {path}")
+    
+    new_dict_entry = f"'{soni_type}': '{formatted_marker}',"
+    if new_dict_entry in content:
+        raise ValueError(f"Formatted string for {soni_type} already in validate_import function in core.py")
+    
+    content = content.replace(
+        formatted_marker,
+        f"{formatted_marker}\n{new_dict_entry}"
+    )
+    
+    import_info_marker = "# Import info marker - DO NOT REMOVE THIS COMMENT"
+    if import_info_marker not in content:
+        raise ValueError(f"Could not find import info marker in {path}")
+    
+    new_elif = f""
 
 if __name__ == "__main__":
     
