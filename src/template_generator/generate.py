@@ -52,7 +52,7 @@ def generate_landing_page(
 
     generated_code = template.render(
         component_name=component_name,
-        soniType=soni_type,
+        soni_type=soni_type,
         api_variable=api_variable,
         heading=heading,
     )
@@ -77,7 +77,7 @@ def generate_refine_menu(
 
     generated_code = template.render(
         component_name=component_name,
-        soniType=soni_type,
+        soni_type=soni_type,
         api_variable=api_variable,
     )
 
