@@ -82,8 +82,8 @@ INPUTS = {
                     'name': 'Azimuth',
                     'desc': 'The horizontal position of the star relative to the observer'
                 }
-        }
-    
+        },
+    # Generated inputs - DO NOT REMOVE THIS COMMENT
 }
 
 OUTPUTS = {

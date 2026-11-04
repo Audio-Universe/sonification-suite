@@ -15,14 +15,14 @@ import { RefineMenuProps } from "../../types/refine_menu";
 import { useState, useEffect, useMemo, useCallback } from "react";
 import LoadingMessage from "../ui/LoadingMessage";
 import ErrorMsg from "../ui/ErrorMsg";
-import { templateAPI } from "../../apiConfig";
+import { [[ api_variable ]] } from "../../apiConfig";
 import { apiRequest } from "../../utils/requests";
 import { InfoTip } from "../ui/ToggleTip";
 import { LuArrowRight } from "react-icons/lu";
 import { plotData } from "../../utils/plot";
 import { debounce, fill } from "es-toolkit";
 
-export default function Template({
+export default function [[ component_name ]]({
   dataName,
   dataRef,
   onApply,
@@ -37,6 +37,7 @@ export default function Template({
   // controlled slider value
   const [cropValues, setCropValues] = useState<[number, number]>([0, 0]);
 
+  // Controlled values for 'start' and 'end' text input
   const [startText, setStartText] = useState(String(cropValues[0]));
   const [endText, setEndText] = useState(String(cropValues[1]));
 
@@ -48,7 +49,7 @@ export default function Template({
     let mounted = true;
     async function fetchPlot() {
       try {
-        const base64 = await plotData(dataRef, "template");
+        const base64 = await plotData(dataRef, "[[ soni_type ]]");
         if (!mounted) return;
         setImageSrc(`data:image/svg+xml;base64,${base64}`);
       } catch (err) {
@@ -71,7 +72,7 @@ export default function Template({
     async function fetchRange() {
       
       try {
-        const endpoint = `${templateAPI}/get-range/`;
+        const endpoint = `${[[ api_variable ]]}/get-range/`;
         const payload = { file_ref: dataRef };
         const result = await apiRequest(endpoint, payload);
 
@@ -117,7 +118,7 @@ export default function Template({
       if (!range) return;
       setImageLoading(true);
 
-      const endpoint = `${templateAPI}/preview-refined/`;
+      const endpoint = `${[[ api_variable ]]}/preview-refined/`;
       const payload = {
         data_name: dataName,
         file_ref: dataRef,
@@ -148,10 +149,11 @@ export default function Template({
     };
   }, [debouncedFetchPreviewPlot]);
 
+  // Handler to save refined dataset and call onApply (triggering the navigate in the parent Refine.tsx)
   const handleClickApply = async () => {
     setApplyLoading(true);
 
-    const endpoint = `${templateAPI}/save-refined/`;
+    const endpoint = `${[[ api_variable ]]}/save-refined/`;
     const payload = {
       data_name: dataName,
       file_ref: dataRef,
@@ -167,6 +169,7 @@ export default function Template({
     setApplyLoading(false);
   };
 
+  // This tracks whether any changes have been made (used to change the appearance/text of the apply button)
   const slidersMoved =
     cropValues && cropRange
       ? cropValues![0] == cropRange![0] &&

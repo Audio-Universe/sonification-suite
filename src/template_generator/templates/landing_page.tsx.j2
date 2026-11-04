@@ -365,7 +365,7 @@ export default function [[ component_name ]]() {
                 overflow="hidden"
               >
                 <img
-                  src={getImage(suggestion.name, ".svg")} // This is a custom function to grab the '{suggestion.name}.svg' image from our /assets directory
+                  src={getImage(suggestion.name, ".svg")} // This is a custom function to grab the '{suggestion.name}.svg' image from our /assets directory. You will need to create/find icons for your suggestions and add them there.
                   alt={`A template image for ${suggestion.name}`} // You should provide alt text for all images, as this is read out by screen readers
                   style={{
                     width: "100%",

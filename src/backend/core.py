@@ -21,7 +21,7 @@ from utils import resolve_file, read_YAML_file, write_YAML_file, is_synth, write
 from sonification_helpers import get_source_names, preprocess_style, place_on_dome, write_mapping_table
 from generator_mods import GENERATOR_MODS
 from request_models import DataRequest, CustomStyleSettings, SonificationRequest, SoundInfo, VolumeRequest
-from param_descriptions import INPUTS, OUTPUTS
+from inputs_outputs import INPUTS, OUTPUTS
 from analytics import log_event
 
 router = APIRouter(prefix='/core')
@@ -651,7 +651,6 @@ async def upload_data(request: Request, file: UploadFile, soni_type: str | None 
 def validate_import(file_contents: bytes, soni_type: str, filename: str):
     """ Check that the imported data file is of the expected soni_type by 
         checking that all of the expected columns are present.
-    
     """
     
     # Formatted strings for the error message
