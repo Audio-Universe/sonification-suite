@@ -692,9 +692,7 @@ def validate_import(file_contents: bytes, soni_type: str, filename: str):
         )
     
     # Import info marker - DO NOT REMOVE THIS COMMENT
-    elif soni_type == 'template':
-        # Add things you want to set up your refine menu here
-        pass
+    
         
     session_id = session_id_var.get()
     file_name = f'{soni_type}.csv'
