@@ -1,7 +1,6 @@
 import {
   Box,
   Button,
-  Code,
   Image,
   Text,
   NumberInput,
@@ -17,10 +16,9 @@ import LoadingMessage from "../ui/LoadingMessage";
 import ErrorMsg from "../ui/ErrorMsg";
 import { [[ api_variable ]] } from "../../apiConfig";
 import { apiRequest } from "../../utils/requests";
-import { InfoTip } from "../ui/ToggleTip";
 import { LuArrowRight } from "react-icons/lu";
 import { plotData } from "../../utils/plot";
-import { debounce, fill } from "es-toolkit";
+import { debounce } from "es-toolkit";
 
 export default function [[ component_name ]]({
   dataName,

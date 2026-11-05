@@ -53,7 +53,7 @@ export default function [[ component_name ]]() {
     in the custom style menu. On the Sonify page, the place on dome feature only appears if the soniType 
     is 'light_curves' or 'constellations' etc.
 
-    The current list of soniTypes is as follows (and these are consistent with the SONI_TYPE constants 
+    The list of soniTypes in V1 is as follows (and these are consistent with the SONI_TYPE constants 
     used in the backend): 'light_curves', 'constellations', 'night_sky', 'data_composer'.
 
    */
@@ -377,7 +377,7 @@ export default function [[ component_name ]]() {
               </Box>
 
               {/* The card body contains the data name as a title, and the description, 
-              which you should add in the backend /suggested_data/template/ yaml files */}
+              which you should add in the backend /suggested_data/[[ soni_type ]] yaml files */}
               <Card.Body>
                 <Card.Title mb="2">{suggestion.name}</Card.Title>
                 <Card.Description>{suggestion.description}</Card.Description>

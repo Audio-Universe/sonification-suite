@@ -38,7 +38,7 @@ def generate_api(soni_type: str):
 
     output_path.write_text(generated_code, encoding="utf-8")
 
-    print(f"Created {soni_type} API: {output_path}")
+    print(f"\033[32mCreated {soni_type} API: {output_path}\033[0m")
 
 def generate_landing_page(
     component_name: str,
@@ -64,7 +64,7 @@ def generate_landing_page(
 
     output_path.write_text(generated_code, encoding="utf-8")
 
-    print(f"Created {component_name} landing page: {output_path}")
+    print(f"\033[32mCreated {component_name} landing page: {output_path}\033[0m")
     
 def generate_refine_menu(
     component_name: str,
@@ -88,7 +88,7 @@ def generate_refine_menu(
 
     output_path.write_text(generated_code, encoding="utf-8")
 
-    print(f"Created {soni_type} refine menu: {output_path}")
+    print(f"\033[32mCreated {soni_type} refine menu: {output_path}\033[0m")
     
 def add_suggested_data(soni_type: str):
     """ Create the new sugggested data directory and Write some random data 
@@ -125,7 +125,7 @@ def add_suggested_data(soni_type: str):
             file.write(f"# You can also add things here like ra/dec (if {soni_type} is compatible with Place on Dome.\n# For light curves, we also add 'category' to split suggestions into tabs.\n")
             yaml.safe_dump(metadata, file)
             
-    print(f"Created suggested data directory and added placeholder data: {data_dir}")
+    print(f"\033[32mCreated suggested data directory and added placeholder data: {data_dir}\033[0m")
             
 def add_style_file(soni_type: str):
     """ Create directory for style files and add placeholder style """
@@ -160,7 +160,7 @@ def add_style_file(soni_type: str):
     with style_path.open("w") as file:
         yaml.safe_dump(style, file)
     
-    print(f"Created style files directory and added placeholder style: {style_dir}")
+    print(f"\033[32mCreated style files directory and added placeholder style: {style_dir}\033[0m")
     
     
 def add_api_config(soni_type: str, api_variable: str):
@@ -188,7 +188,7 @@ def add_api_config(soni_type: str, api_variable: str):
 
     path.write_text(content, encoding="utf-8")
     
-    print(f"Added API address in frontend: {path}")
+    print(f"\033[32mAdded API address in frontend: {path}\033[0m")
     
 def add_route(soni_type: str, component_name: str):
     """ Add generated landing page component and route to App.tsx """
@@ -229,7 +229,7 @@ def add_route(soni_type: str, component_name: str):
 
     path.write_text(content, encoding="utf-8")
     
-    print(f"Created route to new landing page and added to app: {path}")
+    print(f"\033[32mCreated route to new landing page and added to app: {path}\033[0m")
     
 def add_api_router(soni_type: str):
     
@@ -268,7 +268,7 @@ def add_api_router(soni_type: str):
 
     path.write_text(content, encoding="utf-8")
     
-    print(f"Added API router to app in backend: {path}")
+    print(f"\033[32mAdded API router to app in backend: {path}\033[0m")
     
 def add_soni_type_metadata(soni_type: str, label: str, description: str):
     
@@ -312,7 +312,7 @@ def add_soni_type_metadata(soni_type: str, label: str, description: str):
         
     path.write_text(content, encoding="utf-8")
         
-    print(f"Added soniType metadata in frontend: {path}")
+    print(f"\033[32mAdded soniType metadata in frontend: {path}\033[0m")
     
 def update_validate_import(soni_type: str, formatted_soni_type: str):
     """ Update the validate_import function in core.py with the new soni_type. 
@@ -362,7 +362,7 @@ def update_validate_import(soni_type: str, formatted_soni_type: str):
     
     path.write_text(content, encoding="utf-8")
             
-    print(f"Updated validate_import function: {path}")
+    print(f"\033[32mUpdated validate_import function: {path}\033[0m")
     
 def add_inputs(soni_type: str):
     """ Add the placeholder parameter names and decriptions for the new soni_type's 
@@ -408,32 +408,26 @@ def add_inputs(soni_type: str):
     
     path.write_text(content, encoding="utf-8")
     
-    print(f"Added placeholder input descriptions: {path}")
+    print(f"\033[32mAdded placeholder input descriptions: {path}\033[0m")
     
-
-if __name__ == "__main__":
-    
-    soni_type = 'black_holes'
-    component_name = 'BlackHoles'
-    label = 'Black Holes'
-    formatted_soni_type = 'black hole'
-    description = 'Listen to black holes do their thing'
-    
-    # Convert snake case (light_curves) to camel case (lightCurves) for consistency in frontend
-    words = soni_type.split('_')
-    camel_case = words[0] + ''.join(word.capitalize() for word in words[1:])
-
-    api_variable = f"{camel_case}API"
-    
-    # Backend
+def generate(
+    soni_type: str,
+    component_name: str,
+    label: str,
+    lowercase_singular: str,
+    description: str,
+    api_variable: str
+):
+    """ Generate all backend/frontend code and templates for the new sonification type. """
+    # Generate backend code
     generate_api(soni_type=soni_type)
     add_api_router(soni_type=soni_type)
     add_suggested_data(soni_type=soni_type)
     add_style_file(soni_type=soni_type)
     add_inputs(soni_type=soni_type)
-    update_validate_import(soni_type=soni_type, formatted_soni_type=formatted_soni_type)
+    update_validate_import(soni_type=soni_type, formatted_soni_type=lowercase_singular)
     
-    # Frontend
+    # Generate frontend code
     add_api_config(soni_type=soni_type, api_variable=api_variable)
     generate_landing_page(
         component_name=component_name,
@@ -448,3 +442,34 @@ if __name__ == "__main__":
     )
     add_soni_type_metadata(soni_type=soni_type, label=label, description=description)
     add_route(soni_type=soni_type, component_name=component_name)
+    
+    
+
+if __name__ == "__main__":
+    
+    soni_type = 'exoplanets'
+    component_name = 'Exoplanets'
+    label = 'Exoplanets'
+    lowercase_singular = 'exoplanet'
+    description = 'Listen to exoplanets do their thing'
+    
+    # Convert snake case (light_curves) to camel case (lightCurves) for consistency in frontend
+    if '_' in soni_type:
+        words = soni_type.split('_')
+        camel_case = words[0] + ''.join(word.capitalize() for word in words[1:])
+    else:
+        camel_case = soni_type.lower()
+
+    api_variable = f"{camel_case}API"
+    
+    # Generate all backend/frontend code and templates for the new sonification type
+    generate(
+        soni_type=soni_type,
+        component_name=component_name,
+        label=label,
+        lowercase_singular=lowercase_singular,
+        description=description,
+        api_variable=api_variable
+    )
+    
+    
