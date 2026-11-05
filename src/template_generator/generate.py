@@ -347,9 +347,9 @@ def update_validate_import(soni_type: str, formatted_soni_type: str):
         raise ValueError(f"Could not find import info marker in {path}")
     
     new_elif_branch = f"""    elif soni_type == '{soni_type}':
-            # Add things you want to set up your refine menu here
-            # For example, 
-            pass
+        # Add things you might want to set up/limit your refine menu here
+        # See above for examples of what we send for other soni_types
+        pass
     """
     
     if new_elif_branch in content:

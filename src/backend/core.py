@@ -651,6 +651,13 @@ async def upload_data(request: Request, file: UploadFile, soni_type: str | None 
 def validate_import(file_contents: bytes, soni_type: str, filename: str):
     """ Check that the imported data file is of the expected soni_type by 
         checking that all of the expected columns are present.
+        
+        Additionally, gather info about the imported data to send to the frontend. 
+        This info will help set up things in the refine menu. For example, if importing 
+        a Night Sky dataset, we find the maximum magnitude in the dataset and send that 
+        to the frontend, to limit the magnitude that a user can enter. For constellations, 
+        we tell the frontend whether it is a stick figure constellation, so that it can 
+        enforce stick figure mode in the refine menu.
     """
     
     # Formatted strings for the error message
@@ -676,11 +683,13 @@ def validate_import(file_contents: bytes, soni_type: str, filename: str):
     import_info= {
         'data_name': filename,
     }
-
+        
     if soni_type == 'night_sky':
+        # Send max magnitude to frontend to limit mag in refine menu
         import_info['max_magnitude'] = df['magnitude'].max()
     
     elif soni_type == 'constellations':
+        # Return stick figure boolean flag and number of stars
         import_info['stick_figure'] = bool(df['stick_figure'].iloc[0])
         import_info['star_count'] = len(df)
 

@@ -318,6 +318,7 @@ export default function Lightcurves() {
   };
 
   const handleImportSuccess = (result: ImportResult) => {
+
       const state: NavigationState = {
         dataName: result.import_info.data_name as string,
         sourceDataRef: result.file_ref,
