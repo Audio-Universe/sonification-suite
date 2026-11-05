@@ -483,20 +483,16 @@ if __name__ == "__main__":
         camel_case = words[0] + "".join(word.capitalize() for word in words[1:])
         api_variable = f"{camel_case}API"
         
+        # Ask for description
+        print('\nNext, we need a description to display on the Planetaria landing page.')
+        print("\nE.g. 'Listen to an exoplanet system orbit around you.'")
+        description = input("\nEnter description (you can edit this later in frontend/src/types/soniTypes.ts): ")
+        
         # Ask for the singular form
+        print('\nNow we need the singular form of the noun. This is used to populate error messages correctly.')
         lowercase_singular = input(
             "\nEnter the singular form (e.g. 'exoplanet' for 'Exoplanets'): "
         ).strip().lower()
-
-        # Ask for description
-        description = input("\nEnter a short description of this sonification type: ")
-
-        # Allow the user to correct the inferred singular form
-        print(f"\nInferred singular form: {lowercase_singular}")
-        correction = input("Enter a different singular form, or press Enter to accept: ")
-
-        if correction.strip():
-            lowercase_singular = correction.strip().lower()
 
         # Display summary
         print("\n" + "-" * 45)
@@ -504,15 +500,13 @@ if __name__ == "__main__":
         print("-" * 45)
 
         print(f"Sonification type:  {soni_type}")
-        print(f"Component name:     {component_name}")
-        print(f"Label:              {label}")
+        print(f"Display name:       {label}")
         print(f"Singular form:      {lowercase_singular}")
         print(f"Description:        {description}")
-        print(f"API variable:       {api_variable}")
 
         print("-" * 45)
 
-        confirmation = input("\nProceed with generation? (y/n): ").strip().lower()
+        confirmation = input("\nProceed with template generation? (y/n): ").strip().lower()
 
         if confirmation in ("y", "yes"):
             break
@@ -524,15 +518,14 @@ if __name__ == "__main__":
         print("\nPlease enter y or n.\n")
 
     # Generate the new sonification type
-    
-    # generate(
-    #     soni_type=soni_type,
-    #     component_name=component_name,
-    #     label=label,
-    #     lowercase_singular=lowercase_singular,
-    #     description=description,
-    #     api_variable=api_variable
-    # )
+    generate(
+        soni_type=soni_type,
+        component_name=component_name,
+        label=label,
+        lowercase_singular=lowercase_singular,
+        description=description,
+        api_variable=api_variable
+    )
     
     print("\nGeneration complete!")
     
