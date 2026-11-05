@@ -332,7 +332,8 @@ def update_validate_import(soni_type: str, formatted_soni_type: str):
     if formatted_marker not in content:
         raise ValueError(f"Could not find formatted string marker in {path}")
     
-    new_dict_entry = f"'{soni_type}': '{formatted_soni_type}',"
+    # Have to ensure same indentation as the existing code
+    new_dict_entry = f"        '{soni_type}': '{formatted_soni_type}',"
     if new_dict_entry in content:
         raise ValueError(f"Formatted string for {soni_type} already in validate_import function in core.py")
     
@@ -345,11 +346,10 @@ def update_validate_import(soni_type: str, formatted_soni_type: str):
     if import_info_marker not in content:
         raise ValueError(f"Could not find import info marker in {path}")
     
-    new_elif_branch = f"""elif soni_type == '{soni_type}':
-
-        # Add things you want to set up your refine menu here
-
-        pass
+    new_elif_branch = f"""    elif soni_type == '{soni_type}':
+            # Add things you want to set up your refine menu here
+            # For example, 
+            pass
     """
     
     if new_elif_branch in content:
@@ -357,7 +357,7 @@ def update_validate_import(soni_type: str, formatted_soni_type: str):
     
     content = content.replace(
         import_info_marker,
-        f"{new_elif_branch}\n{import_info_marker}"
+        f"{import_info_marker}\n{new_elif_branch}"
     )
     
     path.write_text(content, encoding="utf-8")
@@ -418,7 +418,6 @@ def generate(
     description: str,
     api_variable: str
 ):
-    """ Generate all backend/frontend code and templates for the new sonification type. """
     # Generate backend code
     generate_api(soni_type=soni_type)
     add_api_router(soni_type=soni_type)
@@ -462,7 +461,6 @@ if __name__ == "__main__":
 
     api_variable = f"{camel_case}API"
     
-    # Generate all backend/frontend code and templates for the new sonification type
     generate(
         soni_type=soni_type,
         component_name=component_name,
