@@ -2,7 +2,7 @@
 
 An accessible platform for transforming datasets into tangible audio representations.
 
-- Explore the [User Guide](user-guide.md) for quick start or detailed help
-- Read the [About](about.md) pages for more information
+- Explore the [User Guide](help/user-guide.md) for quick start or detailed help
+- Read the [Background & Credits](about/background-credits.md) page for more information
 
 

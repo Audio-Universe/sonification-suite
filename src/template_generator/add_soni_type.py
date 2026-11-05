@@ -426,6 +426,7 @@ def generate(
     api_variable: str
 ):
     # Generate backend code
+    print("\nGenerating backend code...\n")
     generate_api(soni_type=soni_type)
     add_api_router(soni_type=soni_type)
     add_suggested_data(soni_type=soni_type)
@@ -434,6 +435,7 @@ def generate(
     update_validate_import(soni_type=soni_type, formatted_soni_type=lowercase_singular)
     
     # Generate frontend code
+    print("\nGenerating frontend code...\n")
     add_api_config(soni_type=soni_type, api_variable=api_variable)
     generate_landing_page(
         component_name=component_name,
@@ -527,6 +529,14 @@ if __name__ == "__main__":
         api_variable=api_variable
     )
     
-    print("\nGeneration complete!")
+    print(f"\n\033[1;32mGeneration complete!\033[0m")
+    print("You can now run the app, and your new sonification type will be available.")
+    
+    print("\n" + "-" * 45 + "\n")
+    print("NEXT STEPS:\n")
+    print("The templates have been generated and wired up to the app.")
+    print("The next step is adding the details that are specific to your sonification type.\n")
+    print("For full instructions, please visit the Building Extensions readthedocs page.")
+    print("\n" + "-" * 45 + "\n")
     
     

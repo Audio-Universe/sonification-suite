@@ -71,5 +71,69 @@ We use [ChakraUI (v3)](https://chakra-ui.com/docs/components/concepts/overview) 
 
 ### Frontend Structure
 
+The majority of the frontend code lives in `src/frontend/src`. Due to the modular, component-based nature of React, a lot of components are nested within each other. For example, the absolute parent of the app is main.tsx, where you will see the entire `<App />` component inserted into the [browser's DOM](https://developer.mozilla.org/en-US/docs/Web/API/Document_Object_Model). Then if you go into App.tsx, you will see all of the routes, and the associated components (pages) each of them load.
+
+#### Components
+
+ `src/components` contains the core components which make up the app. For example in `components/pages`, you will find the landing pages for each sonification type, the Style page, the Sonify page, etc.
+
+ `components/ui` contains smaller user interface components which are reused across the app, such as `PageContainer.tsx` which defines the borders of each page, including the header and footer. 
+
+ `components/utils` contains reusable menus and utilities, such as the custom style menu and the data import feature. 
+
+ `components/refine_menus` contains the refine pages that are specific to each sonification type.
+
+### Navigation & State
+
+A key concept in the frontend is how data persists between pages when navigating. We add any data/variables that need to persist to a state object which we then pass to the `navigate()` function. We then unpack this at the destination page so that the variables can be used again.
+
+For example, we keep track of which sonification type (light curves, constellations, etc.) we are currently using with the `soniType` variable. This variable is passed to the navigate function in the state object, so that the next page knows what sonification type is being used, and therefore which options/components to render.
+
+`soniType` is an example used commonly throughout the app, but there are also numerous other variables and flags added to the state which often only do one specific job for a specific sonification type. 
+
+You can see all of the items and their descriptions in `src/types/navigation.ts`.
 
 
+## End-to-End Workflow
+
+This section details the complete flow of data through the application for a typical use case: creating a sonification from a light curve.
+
+Although the exact process varies slightly between sonification types, the general principles remain the same.
+
+### 1. Initialisation
+
+When a user first opens the application, the frontend (React) is loaded in their browser. The application checks whether the browser already has a session ID stored in its cookies. If not, a new session is created via the `/session/` API endpoint.
+
+This session ID is subsequently included as a cookie with all API requests, allowing the backend to identify the user and associate any generated files or temporary data with their session.
+
+The user then navigates to the Light Curves landing page (`/planetaria/light-curves`).
+
+On load, Lightcurves.tsx initialises the `soniType` variable as `light_curves`.
+
+### 2. Searching for Light Curves
+
+The user enters a search query for a star.
+
+The frontend sends this query to the backend using the `/search-lightcurves/` endpoint in `light_curves.py`. The backend uses Lightkurve to search for available observations of the star.
+
+The search results are returned to the frontend in JSON format, where they are displayed for the user in a table.
+
+### 3. Selecting a Light Curve
+
+When the user selects an observation, the frontend sends another API request to retrieve the corresponding light curve.
+
+The backend downloads the light curve, converts it to CSV, and saves it in the user's temporary session directory. For light curves, the resulting dataset is stored as `light_curves.csv`, overwriting any previous light curve belonging to that session.
+
+The backend returns a [file reference](#file-referencing) to the data, and the frontend adds this to the [navigation state object](#navigation--state) as `sourceDataRef`. It also adds the `soniType`, and then navigates to the next page.
+
+### 4. Refining the Data
+
+The user proceeds to the Refine page.
+
+The parent `Refine.tsx` component knows from the `soniType` which specific refine menu component to load.
+
+If the user moves any sliders, the new range/smoothing values are sent to the backend to process the dataset and re-plot the result.
+
+The refined data is saved in the user's session directory and returns a file reference to the frontend. 
+
+Importantly, this reference to the refined data is saved in the frontend state as just `dataRef`, as opposed to the earlier `sourceDataRef`. This is to differentiate between the original dataset and the refined one, such that if a user navigates back to the Refine page from later in the process, they will get the original (unrefined) dataset to then re-refine how they like.

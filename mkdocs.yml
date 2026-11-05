@@ -5,21 +5,21 @@ site_url: !ENV READTHEDOCS_CANONICAL_URL
 nav:
   - Home: index.md
   - Help:
-    - User Guide: user-guide.md
-    - Data Composer: data-composer.md
-    - Astronomy Reference: astronomy-data.md
-    - Sound Mappings Reference: mappings-reference.md
+    - User Guide: help/user-guide.md
+    - Data Composer: help/data-composer.md
+    - Astronomy Reference: help/astronomy-data.md
+    - Sound Mappings Reference: help/mappings-reference.md
 
   - About:
-    - Background & Credits: about.md
-    - License: license.md
-    - Acknowledgment of Use: acknowledgment-of-use.md
+    - Background & Credits: about/background-credits.md
+    - License: about/license.md
+    - Acknowledgment of Use: about/acknowledgment-of-use.md
 
   - Developer Guide:
-    - Developer Guide: developer-guide/developer-guide.md
     - Installation: developer-guide/installation.md
     - Architecture: developer-guide/architecture.md
     - API Reference: developer-guide/api-reference.md
+    - Building Extensions: developer-guide/building-extensions.md
 
 markdown_extensions:
   - admonition
