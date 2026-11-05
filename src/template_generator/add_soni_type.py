@@ -1,8 +1,15 @@
+""" 
+This module contains all of the logic for generating the required code to add a sonification type to the Suite.
+
+The generator is intended to be interacted with via the command line, so if you'd like to add a sonificaiton 
+type to the Suite, please run this script directly and follow the instructions given.
+"""
+
 from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 import pandas as pd
 import numpy as np
-import yaml
+import yaml, re
 
 # Paths
 GENERATOR_DIR = Path(__file__).parent
@@ -122,7 +129,7 @@ def add_suggested_data(soni_type: str):
         yaml_path = data_dir / f"suggestion{i+1}.yml"
         
         with yaml_path.open("w") as file:
-            file.write(f"# You can also add things here like ra/dec (if {soni_type} is compatible with Place on Dome.\n# For light curves, we also add 'category' to split suggestions into tabs.\n")
+            file.write(f"# You can also add things here like ra/dec (if {soni_type} is compatible with Place on Dome).\n# For light curves, we also add 'category' to split suggestions into tabs.\n")
             yaml.safe_dump(metadata, file)
             
     print(f"\033[32mCreated suggested data directory and added placeholder data: {data_dir}\033[0m")
@@ -442,32 +449,91 @@ def generate(
     add_soni_type_metadata(soni_type=soni_type, label=label, description=description)
     add_route(soni_type=soni_type, component_name=component_name)
     
+
+def normalise_name(name: str) -> str:
+    """Convert user provided sonification type into snake_case."""
+    name = name.strip().lower()
+    name = re.sub(r"[\s-]+", "_", name)
+    name = re.sub(r"[^a-z0-9_]", "", name)
+    name = re.sub(r"_+", "_", name)
+    return name.strip("_")
     
 
 if __name__ == "__main__":
     
-    soni_type = 'exoplanets'
-    component_name = 'Exoplanets'
-    label = 'Exoplanets'
-    lowercase_singular = 'exoplanet'
-    description = 'Listen to exoplanets do their thing'
+    print('Welcome to the template generator!\n')
     
-    # Convert snake case (light_curves) to camel case (lightCurves) for consistency in frontend
-    if '_' in soni_type:
-        words = soni_type.split('_')
-        camel_case = words[0] + ''.join(word.capitalize() for word in words[1:])
-    else:
-        camel_case = soni_type.lower()
+    while True:
+        # Get the sonification type name
+        name = input("Enter the name of your new sonification type (e.g. Exoplanets): ")
 
-    api_variable = f"{camel_case}API"
+        soni_type = normalise_name(name)
+
+        if not soni_type:
+            print("Please enter a valid name.\n")
+            continue
+
+        # Generate naming variations
+        words = soni_type.split("_")
+
+        component_name = "".join(word.capitalize() for word in words)
+        label = " ".join(word.capitalize() for word in words)
+
+        # Convert snake_case to camelCase for the API variable
+        camel_case = words[0] + "".join(word.capitalize() for word in words[1:])
+        api_variable = f"{camel_case}API"
+        
+        # Ask for the singular form
+        lowercase_singular = input(
+            "\nEnter the singular form (e.g. 'exoplanet' for 'Exoplanets'): "
+        ).strip().lower()
+
+        # Ask for description
+        description = input("\nEnter a short description of this sonification type: ")
+
+        # Allow the user to correct the inferred singular form
+        print(f"\nInferred singular form: {lowercase_singular}")
+        correction = input("Enter a different singular form, or press Enter to accept: ")
+
+        if correction.strip():
+            lowercase_singular = correction.strip().lower()
+
+        # Display summary
+        print("\n" + "-" * 45)
+        print("Please check the generated values:")
+        print("-" * 45)
+
+        print(f"Sonification type:  {soni_type}")
+        print(f"Component name:     {component_name}")
+        print(f"Label:              {label}")
+        print(f"Singular form:      {lowercase_singular}")
+        print(f"Description:        {description}")
+        print(f"API variable:       {api_variable}")
+
+        print("-" * 45)
+
+        confirmation = input("\nProceed with generation? (y/n): ").strip().lower()
+
+        if confirmation in ("y", "yes"):
+            break
+
+        if confirmation in ("n", "no"):
+            print("\nLet's try again.\n")
+            continue
+
+        print("\nPlease enter y or n.\n")
+
+    # Generate the new sonification type
     
-    generate(
-        soni_type=soni_type,
-        component_name=component_name,
-        label=label,
-        lowercase_singular=lowercase_singular,
-        description=description,
-        api_variable=api_variable
-    )
+    # generate(
+    #     soni_type=soni_type,
+    #     component_name=component_name,
+    #     label=label,
+    #     lowercase_singular=lowercase_singular,
+    #     description=description,
+    #     api_variable=api_variable
+    # )
+    
+    print("\nGeneration complete!")
     
     
