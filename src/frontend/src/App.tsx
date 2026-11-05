@@ -20,7 +20,6 @@ import NightSky from "./components/pages/NightSky";
 import DataComposer from "./components/pages/DataComposer";
 
 // Generated page imports - DO NOT REMOVE THIS COMMENT
-import Template from "./components/pages/Template";
 
 
 function App() {
@@ -61,7 +60,6 @@ function App() {
                 <Route path="light-curves" element={<Lightcurves />} />
                 <Route path="constellations" element={<Constellations />} />
                 <Route path="night-sky" element={<NightSky />} />
-                <Route path="template" element={<Template />} />
                 <Route path="refine" element={<Refine />} />
                 <Route path="style" element={<Style />} />
                 <Route path="sonify" element={<Sonify />} />
