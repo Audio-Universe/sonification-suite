@@ -7,7 +7,7 @@ nav:
   - Help:
     - User Guide: help/user-guide.md
     - Data Composer: help/data-composer.md
-    - Astronomy Reference: help/astronomy-data.md
+    - Astronomy Data: help/astronomy-data.md
     - Sound Mappings Reference: help/mappings-reference.md
 
   - About:
@@ -26,6 +26,7 @@ markdown_extensions:
   - pymdownx.details
   - pymdownx.superfences
   - attr_list
+  - md_in_html
   - pymdownx.emoji:
       emoji_index: !!python/name:material.extensions.emoji.twemoji
       emoji_generator: !!python/name:material.extensions.emoji.to_svg

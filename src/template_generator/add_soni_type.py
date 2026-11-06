@@ -20,8 +20,8 @@ BACKEND_DIR = GENERATOR_DIR.parent / "backend"
 # Configure Jinja2
 env = Environment(
     loader=FileSystemLoader(TEMPLATE_DIR),
-    variable_start_string="[[",
-    variable_end_string="]]",
+    variable_start_string="[[", # Note we use square brackets to identify variables.
+    variable_end_string="]]", # This is because the default curly braces clash with certain syntax in TSX.
     undefined=StrictUndefined,
     keep_trailing_newline=True,
 )
@@ -491,7 +491,7 @@ if __name__ == "__main__":
         description = input("\nEnter description (you can edit this later in frontend/src/types/soniTypes.ts): ")
         
         # Ask for the singular form
-        print('\nNow we need the singular form of the noun. This is used to populate error messages correctly.')
+        print('\nNow we need the singular form of the noun. This is used to write error messages correctly.')
         lowercase_singular = input(
             "\nEnter the singular form (e.g. 'exoplanet' for 'Exoplanets'): "
         ).strip().lower()
@@ -535,8 +535,9 @@ if __name__ == "__main__":
     print("\n" + "-" * 45 + "\n")
     print("NEXT STEPS:\n")
     print("The templates have been generated and wired up to the app.")
-    print("The next step is adding the details that are specific to your sonification type.\n")
-    print("For full instructions, please visit the Building Extensions readthedocs page.")
+    print("The next step is customising your sonification type.\n")
+    print("For full instructions, please visit: ")
+    print("https://sonification-suite.readthedocs.io/en/latest/developer-guide/building-extensions/#customising-your-extension")
     print("\n" + "-" * 45 + "\n")
     
     

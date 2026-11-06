@@ -56,6 +56,11 @@ def get_data_list():
 
 @router.post('/plot/')
 def plot_item(request: DataRequest):
+    """
+    This is the plotting endpoint called in both the Refine page and the Sonify page.
+    The plot_and_format function is largely similar to our light curve plots, so you will 
+    likely want to customise yours depending on how you'd like your data to be visualised.
+    """
    
     filepath = resolve_file(request.file_ref)
 
@@ -127,7 +132,7 @@ def select_item(request: ItemRequest):
     In this placeholder, we just generate a random CSV file for whichever item is chosen.
     """
     
-    filename = f'{request.item_name}.csv'
+    filename = f'{SONI_TYPE}.csv'
     
     # Get session id from context variable
     session_id = session_id_var.get()

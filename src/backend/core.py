@@ -680,7 +680,7 @@ def validate_import(file_contents: bytes, soni_type: str, filename: str):
         formatted_type = formatted_types.get(soni_type, 'dataset')
         raise HTTPException(status_code=400, detail=f"Imported data appears invalid - are you sure this is a {formatted_type} downloaded from the Suite?")
 
-    import_info= {
+    import_info = {
         'data_name': filename,
     }
         

@@ -45,6 +45,7 @@ export default function LightCurves({
   // sigma value for data smoothing
   const [sigma, setSigma] = useState(0);
 
+  // NaN handling
   const [hasNans, setHasNans] = useState(false);
   const [nanStrategy, setNanStrategy] = useState<NanStrategy>("interpolate");
   const [fillWith, setFillWith] = useState("min");
