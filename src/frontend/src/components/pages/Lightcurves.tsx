@@ -56,8 +56,7 @@ import {
 import { NavigationState } from "../../types/navigation";
 import { capitaliseWords } from "../../utils/formatting";
 import { DataImport, ImportResult } from "../utils/DataImport";
-
-const soniType = "light_curves";
+import { SuggestedData } from "../../types/suggestedData";
 
 export interface Lightcurve {
   id: string;
@@ -69,16 +68,10 @@ export interface Lightcurve {
   dataURI: string;
 }
 
-export interface SuggestedData {
-  name: string;
-  description: string;
-  ra: number;
-  dec: number;
-  fileRef: string;
-  category: string;
-}
-
 export default function Lightcurves() {
+
+  const soniType = "light_curves";
+
   // Instantiate navigation
   const navigate = useNavigate();
 
@@ -325,6 +318,7 @@ export default function Lightcurves() {
   };
 
   const handleImportSuccess = (result: ImportResult) => {
+
       const state: NavigationState = {
         dataName: result.import_info.data_name as string,
         sourceDataRef: result.file_ref,

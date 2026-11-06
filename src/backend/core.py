@@ -1,17 +1,9 @@
+# External imports (from dependencies)
+import logging, yaml, os, uuid, traceback, base64, gc, re, shutil, math, tempfile
 from fastapi import APIRouter, HTTPException, UploadFile, File, Cookie, Response, Request, BackgroundTasks, Form
 from fastapi.responses import FileResponse
 from pathlib import Path
-from paths import TMP_DIR, STYLE_FILES_DIR, SUGGESTED_DATA_DIR, SYNTHS_DIR, SAMPLES_DIR
-from context import session_id_var
-from utils import resolve_file, read_YAML_file, write_YAML_file, is_synth, write_sound_to_style, is_time_series, cleanup_old_layers
-from generator_mods import GENERATOR_MODS
-from request_models import DataRequest, CustomStyleSettings, LayerRequest, SonificationRequest, SoundInfo, VolumeRequest
-import logging, yaml, os, uuid, traceback, base64, gc, re, csv, shutil, math, tempfile, pickle
-from param_descriptions import INPUTS, OUTPUTS
-from night_sky import handle_observer
-from analytics import log_event
 from strauss import AudioFigure
-
 import numpy as np
 import pandas as pd
 import matplotlib
@@ -22,6 +14,15 @@ from scipy.signal import spectrogram, resample_poly
 from io import BytesIO
 from pydub import AudioSegment
 
+# Internal imports (from Suite)
+from paths import TMP_DIR, STYLE_FILES_DIR, SUGGESTED_DATA_DIR, SYNTHS_DIR, SAMPLES_DIR
+from context import session_id_var
+from utils import resolve_file, read_YAML_file, write_YAML_file, is_synth, write_sound_to_style, cleanup_old_layers, is_bot
+from sonification_helpers import get_source_names, preprocess_style, place_on_dome, write_mapping_table
+from generator_mods import GENERATOR_MODS
+from request_models import DataRequest, CustomStyleSettings, SonificationRequest, SoundInfo, VolumeRequest
+from inputs_outputs import INPUTS, OUTPUTS
+from analytics import log_event
 
 router = APIRouter(prefix='/core')
 
@@ -32,15 +33,8 @@ LOG = logging.getLogger(__name__)
 UPLOAD_QUOTA_MB = 50
 UPLOAD_QUOTA_BYTES = UPLOAD_QUOTA_MB * 1024 * 1024
 
-FORMATTED_FILENAMES = {
-    'light_curves': 'Light Curve',
-    'constellations': 'Constellation',
-    'night_sky': 'Night Sky',
-    'data_composer': 'Data Composer'
-}
-
-MASTER_VOL = 0.5
-
+# Maximum length a sonification can be (in seconds)
+MAX_DURATION = 120
 
 @router.get('/session/')
 def get_or_create_session(
@@ -48,6 +42,18 @@ def get_or_create_session(
     response: Response,
     session_id: str | None = Cookie(None),
 ):
+    """ Get the session ID for this user. If none exists, this is a new connection, 
+        so create a new one. We also log new sessions this in the analytics file 
+        (provided we don't think it is bot traffic).
+
+    Args:
+        connection (Request): The HTTP connection
+        response (Response): the Response object (used to set the session ID in cookie)
+        session_id (str | None, optional): The session ID cookie, if present. Defaults to Cookie(None).
+
+    Returns:
+        str: session ID
+    """
     if not session_id:
         session_id = str(uuid.uuid4())
         response.set_cookie(
@@ -59,11 +65,16 @@ def get_or_create_session(
             secure=True,
             path='/'
         )
-        log_event(session_id=session_id, ip=connection.client.host, event='session_start')
         
+        # check if the connection might be a bot (and don't log analytics)
+        user_agent = connection.headers.get("user-agent", "Unknown")
+        
+        if not is_bot(user_agent):
+            log_event(session_id=session_id, ip=connection.client.host, event='session_start')
 
-    user_dir = TMP_DIR / session_id
-    user_dir.mkdir(exist_ok=True)
+        # Create session directory for user's files
+        user_dir = TMP_DIR / session_id
+        user_dir.mkdir(exist_ok=True)
 
     return {'session_id': session_id}
 
@@ -82,19 +93,64 @@ def get_uploads_dir_size(uploads_dir: str) -> int:
 
 @router.post('/generate-sonification/')
 def generate_sonification(request: SonificationRequest, connection: Request):
+    """ Generate a sonification, write it to disk, and return the file ref.
+     
+        This function is the primary function of the entire app, so it is fairly complex. 
+        The request contains all the information needed to build the sonification, including 
+        the duration (in seconds), the soni type (e.g. is it a constellation, light curve etc.), 
+        the audio system, the list of Layers to sonify (often this is just one layer unless using 
+        Data Composer feature) and optionally the Observer details (if using Place on Dome feature). 
+        The general flow is as follows:
+        
+        1. Preamble - check the sonification length doesn't exceed max, and create variables for session_id and 
+        session_dir (create these outside the loop as they are same for all layers).
+        
+        2. Initialise the AudioFigure - This is the STRAUSS object which contains the sonifications (and methods 
+        to generate/save them etc.)
+        
+        3. Loop through the Layers - Often there is only one layer (for light curves, constellations, etc). 
+        The process in each iteration is layer-specific (I.E. handles each layer's specific data and Style).
+        
+            3.1. Resolve data and style refs to their full filepaths
+            3.2. Convert data to Pandas DataFrame
+            3.3. Pre-process Style file by making all necessary edits
+            3.4. Initialise the kwargs dict which is given to the AudioFigure's sonify() function
+            3.5. Set up 'Place on Dome' feature (if using)
+            3.6. Add layer to the AudioFigure by calling sonify()
+            3.7. Write the layer's Mapping Table to CSV
+            3.8. Write the layer audio to WAV so user can download individual layers
+            
+            Loop through these steps as many times as there are layers
+            
+        4. Write the AudioFigure to WAV in user's session directory
+        
+        5. Log the 'sonification generated' event in the analytics file, and cleanup any old audio files
+
+    Args:
+        request (SonificationRequest): the request object, containing all sonification instructions
+        connection (Request): the HTTP connection. We use this to get the client IP address which is 
+        then used to estimate their country to log in analytics.
+
+    Raises:
+        HTTPException: 400 - if requested duration exceeds maximum (this is also prevented in the frontend)
+        HTTPException: 400 - if no session ID present
+        ValueError: if data file is not CSV
+        HTTPException: for any other errors raised during sonification process
+
+    Returns:
+        dict: JSON object containing file_ref (the reference to the generated audio file) and 
+        alt_az (the altitude and azimuth of the object, if using Place on Dome feature, for the frontend to display)
+    """
     
+    if request.duration > MAX_DURATION:
+            raise HTTPException(status_code=400, detail=f"Sonification too long, maximum length is {MAX_DURATION} seconds.")
+        
     session_id = session_id_var.get()
     
     if not session_id:
         raise HTTPException(status_code=400, detail="No session cookie found")
     
     session_dir = TMP_DIR / session_id
-    
-    if request.duration > 60:
-        raise HTTPException(status_code=400, detail="Sonification too long, maximum length is 1 minute.")
-    
-    # Check if we are sonifying star data (we use this to label the mapping table)
-    is_stars = request.soni_type in ['constellations', 'night_sky']
     
     # Initialise AudioFigure
     fig = AudioFigure(system=request.system)
@@ -107,71 +163,30 @@ def generate_sonification(request: SonificationRequest, connection: Request):
         
         try:
             
-            # First, replace base sound name with filepath to the sound
-            style_dict = write_sound_to_style(style_filepath, write_to_yml=False)
-            
-            # Next, validate data format and convert to DataFrame
+            # First, validate data format and convert to DataFrame
             data_type = data_filepath.suffix.lower()
                     
             if data_type == '.csv':
                     df = pd.read_csv(str(data_filepath), header=0)
             else:
                     raise ValueError(f'{data_type} file type not suitable for sonification, please use .csv.')
-                
-            # Determine whether it is safe to downsample the data
-            if is_time_series(df, style_dict):
-                 style_dict['max_notes_per_sec'] = style_dict.get('max_notes_per_sec') or 10
             
-            # Overwrite any time mappings if using a custom star order for constellations
-            if request.soni_type == 'constellations' and 'custom_order' in df.columns:
-                for m in style_dict['map']:
-                    if m['output'] == 'time':
-                        m['input'] = 'custom_order'
-                        m['function'] = None # Remove any previous invert functions
-                        break
-                        
+            # Make all necessary edits to Style file
+            style_dict = preprocess_style(style_filepath, df, request)
+            
             # Build dict with keyword arguments for sonification function
             kwargs = {
+                'style': str(write_YAML_file(style_dict)),
                 'duration': request.duration,
-                'angle_unit': 'degrees' # use degrees as standard for azimuth/polar
+                'angle_unit': 'degrees', # use degrees as standard for azimuth/polar
+                'source_names': get_source_names(df, request.soni_type, layer)
             }
             
-            # Handle case that 'Place on Dome' feature is used
+            # Handle case 'Place on Dome' feature is being used
             if request.observer:
-                position_info = handle_observer(request.observer)
-                
-                # Remove any existing spatial mappings
-                style_dict['map'] = [mapping for mapping in style_dict['map'] 
-                                        if mapping['output'] not in ['azimuth', 'polar', 'pan']]
-                
-                # Add fixed values to kwargs
-                if request.system == 'stereo':
-                    # Use pan
-                    kwargs['fix_pan'] = position_info['STRAUSS_inputs']['pan']
-                elif request.system in ['5.1', '7.1']:
-                    # Use Azimuth and Polar
-                    for param in ['azimuth', 'polar']:
-                        kwargs[f'fix_{param}'] = position_info['STRAUSS_inputs'][param]
-                else:
-                    raise ValueError("Place on Dome feature not available for mono audio")
-                
-                # Get altitude and azimuth values in degrees to send to the frontend to display    
-                alt_az = [position_info['display_values'][value] for value in ['altitude', 'azimuth']]
+                alt_az = place_on_dome(request.observer, style_dict, kwargs, request.system)
             else:
                 alt_az = None
-
-            # Add identifier column for mapping table if necessary
-            if request.soni_type == 'data_composer' and layer.id_column:
-                source_names = df[layer.id_column].to_list()
-            elif is_stars:
-                source_names = df['display_name'].to_list()
-            else:
-                source_names = None
-                
-            kwargs['source_names'] = source_names
-                            
-            # Add style to kwargs
-            kwargs['style'] = str(write_YAML_file(style_dict))
             
             # Add layer to the AudioFigure and sonify
             soni = fig.sonify(df, **kwargs)
@@ -180,40 +195,10 @@ def generate_sonification(request: SonificationRequest, connection: Request):
                 # Set initial volume if not 1 (default)
                 fig.set_level(name=f'sonification_{i}', level=layer.volume)
             
-            # Get the mapping table(s)
-            source_name = 'source_0' if style_dict['sources'].lower() == 'objects' else None
-            table: pd.DataFrame = fig.get_table(name=f'sonification_{i}', source=source_name)
+            # Write the Mapping Table to CSV in user's session directory
+            write_mapping_table(fig, style_dict, request.soni_type, request.observer, df, i, session_dir)
             
-            if is_stars:
-                table.rename(columns={'Source': 'Star Name'}, inplace=True)
-                # Add Hipparcos IDs
-                table['HIP'] = table['Star Name'].map(
-                    df.set_index('display_name')['hip']
-                )
-                
-                # Move the column next to display name
-                cols = list(table.columns)
-                cols.remove(('HIP', ''))
-                cols.insert(cols.index(('Star Name', '')) + 1, ('HIP', ''))
-                table = table[cols]
-                
-            if request.observer:
-                fixed_table = fig.get_fixed_table(name=f'sonification_{i}', source=source_name)
-                # Add each fixed parameter as a column in main mapping table
-                for _, row in fixed_table.iterrows():
-                    parameter = row['parameter']
-                    value = row['value']
-                    unit = row['unit']
-                    unit_header = f'[{unit}]' if unit else ''
-                    table[(parameter, unit_header)] = value
-            
-            # Save mapping table to CSV
-            table_path = session_dir / f'mapping_table_{i}.csv'
-            table.to_csv(table_path, index=False)
-            
-            n_layers = len(request.layers)
-            
-            if n_layers > 1:
+            if len(request.layers) > 1:
                 # Save individual layers so users can download them if desired
                 soni.render(progress=False)
                 layer_name = f'layer_{i}.wav'
@@ -227,18 +212,18 @@ def generate_sonification(request: SonificationRequest, connection: Request):
             LOG.error("Error generating sonification:\n" + traceback.format_exc())
             raise HTTPException(
                 status_code=500,
-                detail="Error generating sonification. If error persists, please try with different Style settings."
+                detail="Error generating sonification. If error persists, please try again with different Style settings."
             )
     
     filename = 'audio_figure.wav'
     filepath = session_dir / filename
     
-    # Set master volume to maximum of layer volumes
+    # Set master volume to maximum of all layer volumes
     master_volume = max([layer.volume for layer in request.layers])
     fig.save(filepath, master_volume=master_volume)
     
     log_event(session_id=session_id, ip=connection.client.host, event='sonification_generated', sonification_type=request.soni_type)
-    cleanup_old_layers(session_id, n_layers)
+    cleanup_old_layers(session_id, len(request.layers))
 
     file_ref = f'session:{filename}'
 
@@ -516,6 +501,7 @@ def download_file(file_ref: str, name: str | None = None):
         media_type="application/octet-stream",
     )
 
+    # Cache buster
     response.headers["Cache-Control"] = "no-store, max-age=0"
 
     return response
@@ -525,10 +511,19 @@ def download_file(file_ref: str, name: str | None = None):
 async def upload_data(request: Request, file: UploadFile, soni_type: str | None = Form(None)):
     """
     Function for the user to upload their own data to the system, which is then written
-    to the tmp directory. The maximum file size is 10mb, as this is a limit set in nginx.
+    to the tmp directory. The maximum file size is 10mb (this is set in nginx).
 
-    - **upload**: The user-uploaded data file and (optionally) the sonification type.
-    - Returns: The filepath of the saved data file.
+    - **request**: The HTTP connection, used to log the IP address of the upload attempt
+    - **file**: The user-uploaded data file
+    - **soni_type**: Optionally, the sonification type (if this is imported data from the Suite). 
+    This is then used to validate that the data is of the correct sonification type.
+    
+    Returns:
+    - **file_ref**: The reference to the uploaded file
+    - **import_info**: If this is an import, the info contains the data name, 
+    and often values needed to set up the refine page (e.g. number of stars, max magnitude, etc.).
+    If not an import, this is None. 
+    
     """
 
 
@@ -654,11 +649,23 @@ async def upload_data(request: Request, file: UploadFile, soni_type: str | None 
 
 
 def validate_import(file_contents: bytes, soni_type: str, filename: str):
+    """ Check that the imported data file is of the expected soni_type by 
+        checking that all of the expected columns are present.
+        
+        Additionally, gather info about the imported data to send to the frontend. 
+        This info will help set up things in the refine menu. For example, if importing 
+        a Night Sky dataset, we find the maximum magnitude in the dataset and send that 
+        to the frontend, to limit the magnitude that a user can enter. For constellations, 
+        we tell the frontend whether it is a stick figure constellation, so that it can 
+        enforce stick figure mode in the refine menu.
+    """
     
+    # Formatted strings for the error message
     formatted_types = {
         'light_curves': 'light curve',
         'constellations': 'constellation',
-        'night_sky': 'night sky'
+        'night_sky': 'night sky',
+        # Formatted string marker - DO NOT REMOVE THIS COMMENT
     }
     
     if soni_type not in formatted_types.keys():
@@ -670,16 +677,19 @@ def validate_import(file_contents: bytes, soni_type: str, filename: str):
     
     # Check that the basic columns for this soni type are a subset of the imported columns
     if not expected_cols <= set(df.columns):
-        raise HTTPException(status_code=400, detail=f"Imported data appears invalid - are you sure this is a {formatted_types[soni_type]} downloaded from the Suite?")
+        formatted_type = formatted_types.get(soni_type, 'dataset')
+        raise HTTPException(status_code=400, detail=f"Imported data appears invalid - are you sure this is a {formatted_type} downloaded from the Suite?")
 
-    import_info= {
+    import_info = {
         'data_name': filename,
     }
-
+        
     if soni_type == 'night_sky':
+        # Send max magnitude to frontend to limit mag in refine menu
         import_info['max_magnitude'] = df['magnitude'].max()
     
     elif soni_type == 'constellations':
+        # Return stick figure boolean flag and number of stars
         import_info['stick_figure'] = bool(df['stick_figure'].iloc[0])
         import_info['star_count'] = len(df)
 
@@ -689,6 +699,9 @@ def validate_import(file_contents: bytes, soni_type: str, filename: str):
             if 'custom_order' in df.columns
             else None
         )
+    
+    # Import info marker - DO NOT REMOVE THIS COMMENT
+    
         
     session_id = session_id_var.get()
     file_name = f'{soni_type}.csv'
@@ -783,13 +796,10 @@ def get_suggested(soni_type: str):
         except Exception as e:
             print(f'Failed to read or parse {file}: {e}')
             continue
+        
+        filename = 'hyg.csv' if soni_type == 'constellations' else str(file.stem) + '.csv'
 
-        filenames = {
-            'light_curves': str(file.stem) + '.csv',
-            'constellations': 'hyg.csv'
-        }
-
-        file_ref = f'suggested_data:{soni_type}:{filenames[soni_type]}'
+        file_ref = f'suggested_data:{soni_type}:{filename}'
 
         data = {'name': name,
                 'description': desc,
@@ -800,6 +810,8 @@ def get_suggested(soni_type: str):
                 }
 
         data_list.append(data)
+        
+    print(data_list)
         
     return data_list
 
@@ -875,8 +887,9 @@ def get_sound_info():
 def preview_style_settings(request: DataRequest):
 
     # Resolve style ref to path and swap sound name for full filepath
-    style = resolve_file(request.file_ref)
-    style_dict = write_sound_to_style(style, write_to_yml=False)
+    style_path = resolve_file(request.file_ref)
+    style_dict = read_YAML_file(style_path)
+    style_dict = write_sound_to_style(style_dict)
     
     # Generate synthetic data for previews
     N = 100 if style_dict["sources"] == "objects" else 50

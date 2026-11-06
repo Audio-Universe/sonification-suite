@@ -2,29 +2,7 @@ import { Fragment } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Breadcrumb, Box } from "@chakra-ui/react";
 import { NavigationState } from "../../types/navigation";
-
-const DATA_TYPES = [
-  {
-    label: "Light Curves",
-    soniType: "light_curves",
-    path: "/planetaria/light-curves",
-  },
-  {
-    label: "Constellations",
-    soniType: "constellations",
-    path: "/planetaria/constellations",
-  },
-  {
-    label: "Night Sky",
-    soniType: "night_sky",
-    path: "/planetaria/night-sky",
-  },
-  {
-    label: "Data Composer",
-    soniType: "data_composer",
-    path: "/data-composer",
-  },
-];
+import { astroTypes } from "../../types/soniTypes";
 
 interface Step {
   label: string;
@@ -51,16 +29,24 @@ export default function Breadcrumbs() {
   if (!isDataComposer && !isPlanetaria) return null;
 
   // Determine the sonification type.
+  const getAstroTypePath = (key: string, page: string) =>
+    key === "data_composer" ? page : `/planetaria/${page}`;
+
+  const soniTypeFromPath = astroTypes.find(
+    (astroType) =>
+      getAstroTypePath(astroType.key, astroType.page!) === pathname,
+  );
+
   // On the initial data page we can get it from the pathname.
   // On Refine/Style/Sonify it comes from navigation state.
-  const dataTypeFromPath = DATA_TYPES.find((d) => d.path === pathname);
-
-  const soniType =
-    dataTypeFromPath?.soniType ??
+  const currentSoniTypeKey =
+    soniTypeFromPath?.key ??
     state?.soniType ??
     (isDataComposer ? "data_composer" : null);
 
-  const currentDataType = DATA_TYPES.find((d) => d.soniType === soniType);
+  const currentSoniType = astroTypes.find(
+    (astroType) => astroType.key === currentSoniTypeKey,
+  );
 
   const isRefine = pathname.endsWith("/refine");
   const isStyle = pathname.endsWith("/style");
@@ -111,10 +97,11 @@ export default function Breadcrumbs() {
       path: "/planetaria",
     });
 
-    if (currentDataType) {
+    // Add the breadcrumb for the current
+    if (currentSoniType) {
       steps.push({
-        label: currentDataType.label,
-        path: currentDataType.path,
+        label: currentSoniType.label,
+        path: getAstroTypePath(currentSoniType.key, currentSoniType.page!),
       });
     }
 

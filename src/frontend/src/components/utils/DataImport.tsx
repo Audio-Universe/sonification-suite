@@ -1,8 +1,6 @@
-import { useState } from "react";
-import { Box, Button, FileUpload, HStack, Text } from "@chakra-ui/react";
+import { Button, FileUpload, HStack, Text } from "@chakra-ui/react";
 import { LuFileUp } from "react-icons/lu";
 import { coreAPI } from "../../apiConfig";
-import ErrorMsg from "../ui/ErrorMsg";
 
 export interface ImportResult {
   file_ref: string;

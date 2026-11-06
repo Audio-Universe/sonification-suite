@@ -17,7 +17,7 @@ def log_event(
     sonification_type: str | None = None,
 ):
     """
-    Log an analytics event in the current month's analytics file.
+    Log an analytics event in the current month's analytics file, using format YYYY-MM.csv.
     Uses a file lock to ensure multiple Uvicorn workers don't attempt
     simultaneous writes.
 

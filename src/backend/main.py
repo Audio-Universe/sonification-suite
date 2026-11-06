@@ -1,26 +1,25 @@
-import logging
+import logging, asyncio, sys, traceback
 logging.basicConfig(level=logging.DEBUG)
 for lib in ["uvicorn", "matplotlib", "httpcore", "asyncio", "httpx", "urllib3", 'lightkurve', 'scipy']:
     logging.getLogger(lib).setLevel(logging.INFO)
 
 logger = logging.getLogger("uvicorn.error")
 
-from fastapi import FastAPI, BackgroundTasks, Request, HTTPException
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import JSONResponse
+
+from paths import TMP_DIR
+from contextlib import asynccontextmanager
+from StorageManager import StorageManager
+from context import session_id_var
 
 from light_curves import router as light_curve_router
 from constellations import router as constellations_router
 from night_sky import router as night_sky_router
 from core import router as core_router
 from data_composer import router as composer_router
-from paths import SYNTHS_DIR, SAMPLES_DIR, TMP_DIR, ROOT_DIR
-from contextlib import asynccontextmanager
-from StorageManager import StorageManager
-from context import session_id_var
-from datetime import datetime
-import asyncio, os, httpx, psutil, tracemalloc, time, threading, shutil, sys, traceback
+# Generated router imports - DO NOT REMOVE THIS COMMENT
 
 # fcntl package is only available on unix systems
 if sys.platform != "win32":
@@ -120,9 +119,11 @@ async def session_middleware(request: Request, call_next):
         session_id_var.reset(token)
 
 
-# Import API endpoints
+# Include API routers for each data type/python module
 for router in [light_curve_router, constellations_router, night_sky_router, core_router, composer_router]:
     app.include_router(router)
+# Generated router inclusions - DO NOT REMOVE THIS COMMENT
+
 
 @app.get("/")
 def get_status():

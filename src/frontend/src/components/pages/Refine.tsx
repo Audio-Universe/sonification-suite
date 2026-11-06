@@ -1,8 +1,8 @@
 import { lazy, Suspense } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import PageContainer from "../ui/PageContainer";
-import { Box, Heading, Text, Highlight, Separator } from "@chakra-ui/react";
-import { useComposer, useOptionalComposer } from "../../context/ComposerContext";
+import { Heading, Text, Highlight } from "@chakra-ui/react";
+import { useOptionalComposer } from "../../context/ComposerContext";
 import { NavigationState } from "../../types/navigation";
 import { ApplyResult } from "../../types/refine_menu";
 
@@ -10,7 +10,8 @@ export default function Refine() {
   const navigate = useNavigate();
   const location = useLocation();
   const composer = useOptionalComposer();
-
+  
+  // Here we 'unpack' the NavigationState item into individual variables (and nullify where they aren't present)
   const dataName = location.state.dataName;
   const sourceDataRef = location.state.sourceDataRef;
   const soniType = location.state.soniType;

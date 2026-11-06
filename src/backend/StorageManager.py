@@ -191,7 +191,7 @@ class StorageManager:
             "reason": "disk-threshold" if not aggressive else "emergency-cleanup"
         }
         
-    def cleanup_analytics(retention_months: int = 12):
+    def cleanup_analytics(self, retention_months: int = 12):
         """ Delete any analytics CSVs older than retention_months (default 1 year).
 
         Args:
@@ -239,6 +239,9 @@ class StorageManager:
         # 1. Age-based cleanup (always run)
         age_result = self.cleanup_old_sessions()
         results["age_cleanup"] = age_result
+        
+        # 2. Analytics cleanup (always run)
+        self.cleanup_analytics()
         
         # 2. Check if disk-based cleanup needed
         used_percent, _, free_gb = self.get_disk_usage()

@@ -1,6 +1,5 @@
 from pydantic import BaseModel
 from typing import Optional, Literal, List
-from fastapi import UploadFile
 
 # Define BaseModels for expected API request types
 
@@ -75,7 +74,6 @@ class PlotRequest(BaseModel):
     new_range: list[int]
 
 class RefineRequest(BaseModel):
-    data_name: str
     file_ref: str
     new_range: list[float]
     sigma: int

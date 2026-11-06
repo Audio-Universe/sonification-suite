@@ -64,7 +64,7 @@ import { debounce } from "es-toolkit";
 export default function Sonify() {
   const navigate = useNavigate();
 
-  // Route states
+  // Navigation state
   const location = useLocation();
   const dataName = location.state.dataName;
   const dataRef = location.state.dataRef;
@@ -76,7 +76,10 @@ export default function Sonify() {
   const dec = location.state.dec ?? null;
   const customOrder = location.state.customOrder ?? false;
 
-  /*---------- States ----------*/
+  /*---------- Use States ----------*/
+
+  // If using Data Composer, get the array of Layer objects from the navigation state
+  const [layers, setLayers] = useState<Layer[]>(location.state.layers ?? []);
 
   // Default duration of 45 sec for night sky, 15 sec for everything else
   const [length, setLength] = useState(soniType === "night_sky" ? "45" : "15");
@@ -119,8 +122,6 @@ export default function Sonify() {
   const [audioKey, setAudioKey] = useState("");
   const audioRef = useRef<HTMLAudioElement>(null);
 
-  const [layers, setLayers] = useState<Layer[]>(location.state.layers ?? []);
-
   // Allow sonifications up to 2 minutes for everything apart from multi-layered (3+ layers) sonifications
   // This is to try and save disk space on server
   const MAX_DURATION = layers.length > 2 ? 60 : 120;
@@ -156,7 +157,7 @@ export default function Sonify() {
     if (specImage && soniType === "light_curves") setActivePanel("spectrogram");
   }, [specImage]);
 
-  // Fetch data range once on load for lightcurves
+  // Fetch data range on load for lightcurves for the days per second control
   useEffect(() => {
     if (soniType != "light_curves") {
       return;
@@ -499,7 +500,7 @@ export default function Sonify() {
                     </Field.HelperText>
                   )}
                   <Field.ErrorText>
-                    {`Maximum ${MAX_DURATION} seconds ${layers.length > 2 ? ' when using more than 2 layers' : ''}`}
+                    {`Maximum ${MAX_DURATION} seconds ${layers.length > 2 ? " when using more than 2 layers" : ""}`}
                   </Field.ErrorText>
                 </Field.Root>
                 {soniType === "light_curves" && (

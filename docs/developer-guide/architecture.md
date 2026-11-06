@@ -1,2 +1,210 @@
-The Sonification Suite currently runs as a web app, built using a decoupled frontend/backend architecture and deployed on a single self-hosted server.
+# System Architecture
 
+The Sonification Suite currently runs as a web app, built using a decoupled frontend/backend architecture and deployed on a single self-hosted Linux server.
+
+## Backend
+
+The backend is built with Python, using [FastAPI](https://fastapi.tiangolo.com/) as the web framework for the REST API. The decision to use Python in the backend was purely to allow us to integrate [STRAUSS](https://strauss.readthedocs.io/en/latest/), the sonification engine which powers much of the Suite's functionality.
+
+As with most web apps, the backend handles the vast majority of the logic and data processing, sending data back to the frontend in a format it expects. By default, the API works over HTTPS, and data is sent back and forth in JSON format.
+
+### Backend Structure
+
+The majority of the backend functionality exists in the `src/backend` directory. The entry point for FastAPI is `main.py` - this is where the processes start and where we start the background cleanup task (more on this [below](#storage-manager)).
+
+The API routes are split into different python modules by their functionality or remit. For instance, you will find:
+
+- `light_curves.py` (for API endpoints relating to the light curve sonification type)
+- `constellations.py` (for constellations)
+- `night_sky.py` (for night sky)
+- `data_composer.py` (for data composer)
+- `core.py` (for core functionality which is shared by all sonification types)
+
+Each of these has its own *router* which is then imported in `main.py`. This simply means that the API route for each endpoint is preceded by its router's prefix, e.g. `light-curves/search-lightcurves/` or `constellations/plot/`.
+
+!!! info "Formatting API endpoints"
+
+    Throughout the Suite, we use hyphens (`-`) in place of spaces in all API endpoints, e.g. `light-curves/`. We also use a trailing `/` at the end of each endpoint, e.g. `/search-lightcurves/`. This is purely a stylistic choice, but one used consistently to avoid confusion.
+
+The full documentation for all API endpoints can be found [here](../api-reference).
+
+## Data Layer
+
+Unlike a traditional web app, the Suite does not make use of a database, as the added complexity of a database layer was not deemed necessary for the Suite's original purpose. As the project grows, it would be wise to add a database (e.g. if we want to add user logins/authentication, so that each user has persistent storage), but in its presently deployed state, the disk space on our self-hosted server is a hard limitation. Particularly as WAV files can quickly deplete storage, it was not feasible to allow users to 'save' their sonifications in-app (hence why downloading them is the main option).
+
+The workaround is that we have various directories in the backend for our shared read-only data, such as `suggested_data`, `sound_assets`, and `style_files`. For user-specific data, e.g. datasets they have refined, sonifications they have generated etc., we use the `tmp` directory, using their session ID to create a unique directory to use as a temporary workspace.
+
+!!! info "Sessions"
+
+    When a new user connects (specifically, a new browser or tab), they are given a unique session ID. This is saved in the frontend as a browser cookie, and sent in the header with every request. This way, when the backend receives a request, it will know which user is asking, and therefore which directory in `tmp` to use.
+
+    This isolates one user's work from another, making it safe for multiple users to use the Suite at once.
+
+    In the backend, the session ID is stored as a Python context variable, so it can be accessed from anywhere. See the `@app.middleware` section in `main.py` and the `/session/` endpoint in `core.py` to see how it works.
+
+### File Referencing
+
+You will see `file_ref` used quite a lot in the backend, and `fileRef` or `dataRef`, `styleRef` etc. in the frontend. We use a file referencing system so as to not expose the full filepaths/internal structure of the production server, and to avoid any cross-platform formatting errors (e.g. `/` vs `\`).
+
+We create file refs by replacing slashes with a colon and using `session` as a prefix if the file lives in the user's session directory, e.g. `session:audio_figure.wav`. A file ref for a shared file might be e.g. `style_files:constellations:mallets.yml`. The last element of a file ref is always the file name with suffix e.g. `beta_persei.csv`.
+
+The `resolve_file` function in `utils.py` translates these references into their full filepaths, returning a Path object from [pathlib](https://docs.python.org/3/library/pathlib.html) (which is used often in the app).
+
+### Storage Management
+
+With all of these session directories for each user, disk space on the server quickly gets eaten up. We have a few strategies for dealing with this - none are perfect, but they work within the confines of our self-hosted server.
+
+#### File Naming
+
+Firstly, we make use of identical file names in certain situations to force overwriting to the same file, hence avoiding writing to lots of new files that might only be temporary. This only makes sense where it is safe to do so, I.E. any time a user will only need **one** of something.
+
+For instance, if a user searches for lightcurves, clicking 'plot' on each one will download the data on server, plot it, and return the image. If each user plots a handful of light curves, and each one is written to its own file, we will quickly bloat the server with data which we don't need. Hence, because each user will only ever need one light curve at a time, we overwrite `light_curves.csv` in the user's unique session directory each time. The same happens for constellations and night sky.
+
+For Data Composer, each user-uploaded dataset is given a unique ID (as this is a security requirement from the University cyber team) and written to an `uploads` directory in the user's session directory. Each time a user uploads a file, we check the size of their session directory. If uploading the file would take it over the session quota (50 MB) it is rejected. We have a file name for each layer audio (`layer_1.wav`, `layer_2.wav` etc.) and one for the combined 'master' audio `audio_figure.wav`.
+
+#### Storage Manager
+
+We also implement a StorageManager class (`StorageManager.py`) which runs in the background and deletes any session directories older than 1 week (we can likely reduce this in the future, as any one user is unlikely to have a tab open for one week working on the same sonification).
+
+The storage manager also checks the overall disk space on the server, and will trigger a cleanup of the oldest session directories if the disk is over 70% full. If it is over 80% full, a more aggressive cleanup is triggered, which simply means it deletes more session directories to reach a lower target disk usage.
+
+The storage manager runs once every 6 hours to check disk space and clean up any old session directories. It is launched at startup (in `main.py`), and because we use 2 Uvicorn workers on our web server (I.E. two separate processes), we use a [file lock](https://en.wikipedia.org/wiki/File_locking) to ensure only one process runs the cleanup.
+
+The StorageManager class has several attributes in its constructor which may be tweaked in the future, such as:
+
+- `max_age_days`
+- `disk_threshold_percent`
+- `cleanup_interval_hours`
+- `emergency_threshold_percent`
+- `min_free_gb`
+
+## Frontend
+
+The frontend is built using TypeScript and React. React is a JavaScript framework which facilitates single-page component-based user interfaces, and TypeScript is an extension of the JavaScript language that adds static typing (meaning the data types of variables are known before run time, helping to catch bugs early).
+
+We also use [Vite](https://vite.dev/) in development to run the development server and build the frontend (I.E. compile the frontend code into the index.html file that is ultimately served to the browser).
+
+We use [ChakraUI (v3)](https://chakra-ui.com/docs/components/concepts/overview) throughout as our component library. This means that all UI elements like buttons, sliders, inputs etc. come from the same place and have a shared style.
+
+All icons used throughout the Suite come from the [Lucide icon library](https://lucide.dev/icons/). This helps to maintain a cohesive aesthetic across the app.
+
+### Frontend Structure
+
+The majority of the frontend code lives in `src/frontend/src`. Due to the modular, component-based nature of React, a lot of components are nested within each other. For example, the absolute parent of the app is `main.tsx`, where you will see the entire `<App />` component inserted into the [browser's DOM](https://developer.mozilla.org/en-US/docs/Web/API/Document_Object_Model). Then if you go into `App.tsx`, you will see all of the routes, and the associated components (pages) each of them load.
+
+#### Components
+
+`src/components` contains the core components which make up the app. For example, in `components/pages`, you will find the landing pages for each sonification type, the Style page, the Sonify page, etc.
+
+`components/ui` contains smaller user interface components which are reused across the app, such as `PageContainer.tsx` which defines the borders of each page, including the header and footer.
+
+`components/utils` contains reusable menus and utilities, such as the custom style menu and the data import feature.
+
+`components/refine_menus` contains the refine pages that are specific to each sonification type.
+
+### Navigation & State
+
+A key concept in the frontend is how data persists between pages when navigating. We add any data/variables that need to persist to a state object which we then pass to the `navigate()` function. We then unpack this at the destination page so that the variables can be used again.
+
+For example, we keep track of which sonification type (light curves, constellations, etc.) we are currently using with the `soniType` variable. This variable is passed to the navigate function in the state object, so that the next page knows what sonification type is being used, and therefore which options/components to render.
+
+`soniType` is an example used commonly throughout the app, but there are also numerous other variables and flags added to the state which often only do one specific job for a specific sonification type.
+
+You can see all of the items and their descriptions in `src/types/navigation.ts`.
+
+## End-to-End Workflow
+
+This section details the complete flow of data through the application for a typical use case: creating a sonification from a light curve.
+
+Although the exact process varies slightly between sonification types, the general principles remain the same.
+
+### 1. Initialisation
+
+When a user first opens the Suite, the frontend (React) is loaded in their browser. The application checks whether the browser already has a session ID stored in its cookies. If not, a new session is created via the `/session/` API endpoint.
+
+This session ID is subsequently included as a cookie with all API requests, allowing the backend to identify the user and associate any generated files or temporary data with their session.
+
+The user then navigates to the Light Curves landing page (`/planetaria/light-curves`).
+
+On load, Lightcurves.tsx initialises the `soniType` variable as `light_curves`. It then sends this to the `/suggested-data/` endpoint in `core.py` to retrieve information about the relevant suggested datasets (names, descriptions, and file references).
+
+### 2. Searching for Light Curves
+
+The user enters a search query for a star.
+
+The frontend sends this query to the backend using the `/search-lightcurves/` endpoint in `light_curves.py`. The backend uses Lightkurve to search for available observations of the star.
+
+The search results are returned to the frontend in JSON format, where they are displayed for the user in a table.
+
+!!! info "RA & Dec"
+
+    As the light curves sonification type is compatible with the Place on Dome feature, we need to store RA and Dec values. As well as searching with Lightkurve, we send a separate request to SIMBAD to get the RA and Dec of the star.
+
+### 3. Selecting a Light Curve
+
+When the user selects an observation, the frontend sends another API request to retrieve the corresponding light curve.
+
+The backend downloads the light curve, converts it to CSV, and saves it in the user's temporary session directory. For light curves, the resulting dataset is stored as `light_curves.csv`, overwriting any previous light curve belonging to that session.
+
+The backend returns a [file reference](#file-referencing) to the data, and the frontend adds this to the [navigation state object](#navigation--state) as `sourceDataRef`. It also adds the `soniType`, the `dataName` (a nicely formatted name of the star to display), the RA and Dec of the star (for use in the Place on Dome feature) and then navigates to the next page.
+
+### 4. Refining the Data
+
+The user proceeds to the Refine page.
+
+The parent `Refine.tsx` component knows from the `soniType` which specific refine menu component to load.
+
+If the user moves any sliders, the new range/smoothing values are sent to the backend to process the dataset and re-plot the result.
+
+When the user clicks 'Apply', the refined data is saved in the user's session directory and a file reference is returned to the frontend.
+
+!!! info "Original vs refined data"
+
+    Note that the reference to the refined data is saved in the frontend state as just `dataRef`, as opposed to the earlier `sourceDataRef`. This is to differentiate between the original dataset and the refined one, such that if a user navigates back to the Refine page from later in the process, they will get the original (unrefined) dataset to then re-refine how they like.
+
+### 5. Style
+
+On navigating to the Style page, the frontend sends a GET request (with `soniType` in the query) to the `/styles/` endpoint in `core.py` to get the relevant suggested styles from the `style_files` directory.
+
+Note that the full style files are not returned, just information about them, such as name, description, and file reference.
+
+These are then displayed as cards in the frontend. If a user clicks a suggested style, the file reference is stored as `styleRef` in the navigation state, along with `styleName` and `styleDescription`, and we move to the Sonify page.
+
+#### Custom Style Menu
+
+To create a custom style, we need to know which parameters (inputs) are available to map for this sonification type. A request is sent to `/get-inputs/`, which gets the names and descriptions of the available parameters from `inputs_outputs.py`. These are then displayed in the dropdown in the custom style menu.
+
+We also use the `soniType` to enforce the Discrete Data Mode when using Constellations or Night Sky. This is because each row in these datasets is a unique entity, so it wouldn't make sense to interpolate between them (which is what Continuous data mode does).
+
+After the user has selected their custom style settings and clicks 'Apply', the settings are sent to the `/save-style-settings/` endpoint to be translated into the format that Style files expect. This is then saved to a yaml file and written to the user's session directory with a unique ID as the file name. The file ref is returned to the frontend and stored as `styleRef` in the navigation state.
+
+Additionally, the settings in their original format are written to the Style file in the `metadata` field. This is so that if a user clicks 'Edit style' on the Sonify page, we can pre-populate the custom style menu with the original settings (before they were converted to fit the Style file schema).
+
+### 6. Sonify
+
+Upon reaching the Sonify page, the navigation state object contains:
+
+- `soniType`
+- `dataRef`
+- `dataName`
+- `styleRef`
+- `styleName`
+- `styleDescription`
+- `ra`
+- `dec`
+
+We use `dataName`, `styleName` and `styleDescription` to populate the Summary section, and `dataRef` and `styleRef` are the key things sent to the backend when generating the sonification. `soniType` is used throughout the Sonify page to determine what to render. For instance, when `soniType` is `light_curves`, we render the 'Days per Second' input and the Place on Dome button.
+
+When clicking 'Generate Sonification', an object is built containing the `dataRef`, `styleRef`, `soniType`, `duration`, `audioSystem`, and the observer information (including RA/Dec) if the user is using the Place on Dome feature.
+
+This is all sent to the `/generate-sonification/` endpoint in `core.py`. This endpoint then calls STRAUSS to sonify the data using the chosen style. This endpoint also does quite a lot of nuanced work, such as pre-processing the style file, setting up Place on Dome, saving the Mapping Table, and more. For a full understanding of the sonification process, I would recommend looking through the endpoint in the codebase, where it is fully documented.
+
+The backend saves the resulting sonification as a WAV file in the user's session directory, and returns the file reference. The frontend then renders the audio player, and sends a GET request to the `/audio/` endpoint to retrieve the audio and play it. If they click download, the same endpoint is called but with a 'download' flag added as well as the requested format (WAV, MP3).
+
+After generating the audio, the spectrogram can then be requested from `/generate-spectrogram/`. This can take some time to generate depending on the length of the sonification. When it is ready, the tab above the plot will become available to click to view the spectrogram (for light curves, we automatically display the spectrogram when it's ready).
+
+### 7. Cleanup
+
+Throughout this process, all user-specific datasets, plots and generated audio files are stored temporarily in the user's session directory.
+
+These files are not intended to provide persistent storage. The [StorageManager](#storage-manager) runs periodically in the background, removing old session directories and managing overall disk usage on the server. This ensures that temporary files do not accumulate indefinitely and that available server storage remains within acceptable limits.

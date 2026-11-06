@@ -1,7 +1,13 @@
 import { useNavigate } from "react-router-dom";
 import PageContainer from "../ui/PageContainer";
 import { getImage, randomRange } from "../../utils/assets";
-import { LuExternalLink, LuFilm, LuLayers3, LuLightbulb, LuStar } from "react-icons/lu";
+import {
+  LuExternalLink,
+  LuFilm,
+  LuLayers3,
+  LuLightbulb,
+  LuStar,
+} from "react-icons/lu";
 
 import {
   Box,
@@ -15,44 +21,7 @@ import {
   HStack,
   Badge,
 } from "@chakra-ui/react";
-
-interface AstroType {
-  name: string;
-  description: string;
-  page?: string;
-  href?: string;
-  icon?: React.ElementType;
-}
-
-const astroTypes: AstroType[] = [
-  {
-    name: "Light Curves",
-    description: "Listen to fluctuations in a star's light.",
-    page: "light-curves",
-  },
-  {
-    name: "Constellations",
-    description: "Hear the unique qualities of famous star patterns.",
-    page: "constellations",
-  },
-  {
-    name: "Night Sky",
-    description: "Hear the stars at your location appear.",
-    page: "night-sky",
-  },
-  {
-    name: "Data Composer",
-    description: "Upload your own data and compose sonifications in layers.",
-    page: "/data-composer",
-    icon: LuLayers3,
-  },
-  {
-    name: "Suggestions & Examples",
-    description: "Pre-made examples and suggestions for using the Suite.",
-    href: "https://www.audiouniverse.org/sonification-suite/suggestions-and-example-bank",
-    icon: LuLightbulb,
-  },
-];
+import { astroTypes } from "../../types/soniTypes";
 
 export default function Planetaria() {
   const navigate = useNavigate();
@@ -62,9 +31,7 @@ export default function Planetaria() {
       <Heading as="h1">Planetaria</Heading>
       <br />
       <HStack flexWrap="nowrap">
-        <Text>
-          Select a data source to sonify
-        </Text>
+        <Text>Select a data source to sonify</Text>
       </HStack>
       <br />
       <br />
@@ -76,42 +43,24 @@ export default function Planetaria() {
         animation="fade-in 300ms ease-out"
       >
         {astroTypes.map((astroType) => {
-          const isExternal = !!astroType.href;
-
           return (
             <Card.Root
               width="200px"
-              key={astroType.name}
+              key={astroType.key}
               _hover={{ transform: "scale(1.05)" }}
               transition="transform 0.2s ease"
-              variant={isExternal ? "subtle" : "elevated"}
+              variant="elevated"
             >
               <LinkOverlay
                 as={Link}
-                href={astroType.href}
-                onClick={
-                  !isExternal && astroType.page
-                    ? () => navigate(astroType.page!)
-                    : undefined
-                }
-                target={isExternal ? "_blank" : undefined}
-                rel={isExternal ? "noopener noreferrer" : undefined}
+                onClick={() => navigate(astroType.page!)}
                 cursor="pointer"
                 role="button"
                 tabIndex={0}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
-
-                    if (isExternal) {
-                      window.open(
-                        astroType.href,
-                        "_blank",
-                        "noopener,noreferrer",
-                      );
-                    } else if (astroType.page) {
-                      navigate(astroType.page);
-                    }
+                    navigate(astroType.page!);
                   }
                 }}
               >
@@ -138,8 +87,8 @@ export default function Planetaria() {
                   </Box>
                 ) : (
                   <img
-                    src={getImage(astroType.name)}
-                    alt={astroType.name}
+                    src={getImage(astroType.key)}
+                    alt={astroType.label}
                     style={{
                       width: "100%",
                       height: "200px",
@@ -151,15 +100,8 @@ export default function Planetaria() {
               </LinkOverlay>
 
               <Card.Body>
-                <Card.Title mb="2">
-                  {astroType.name}
-                  {isExternal && (
-                    <Icon ml="3" mb="1" boxSize="4" color="gray.500">
-                      <LuExternalLink />
-                    </Icon>
-                  )}
-                </Card.Title>
-                {astroType.name === "Constellations" && (
+                <Card.Title mb="2">{astroType.label}</Card.Title>
+                {astroType.label === "Constellations" && (
                   <Badge
                     animation="scale-in 500ms ease-out"
                     colorPalette="teal"
@@ -176,6 +118,66 @@ export default function Planetaria() {
             </Card.Root>
           );
         })}
+        <Card.Root
+          width="200px"
+          key="suggestions"
+          _hover={{ transform: "scale(1.05)" }}
+          transition="transform 0.2s ease"
+          variant="subtle"
+        >
+          <Link
+            href="https://www.audiouniverse.org/sonification-suite/suggestions-and-example-bank"
+            target="_blank"
+            rel="noopener noreferrer"
+            cursor="pointer"
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+
+                window.open(
+                  "https://www.audiouniverse.org/sonification-suite/suggestions-and-example-bank",
+                  "_blank",
+                  "noopener,noreferrer",
+                );
+              }
+            }}
+          >
+            <Box
+              bg="black"
+              height="200px"
+              width="100%"
+              display="flex"
+              alignItems="center"
+              justifyContent="center"
+              borderRadius="8px"
+            >
+              <Icon
+                boxSize="80px"
+                color="white"
+                strokeWidth={1}
+                style={{
+                  animation: `twinkle ${randomRange(2, 3)}s infinite alternate`,
+                }}
+              >
+                <LuLightbulb />
+              </Icon>
+            </Box>
+          </Link>
+
+          <Card.Body>
+            <Card.Title mb="2">
+              Suggestions & Examples
+              <Icon ml="3" mb="1" boxSize="4" color="gray.500">
+                <LuExternalLink />
+              </Icon>
+            </Card.Title>
+            <Card.Description>
+              Pre-made examples and suggestions for using the Suite.
+            </Card.Description>
+          </Card.Body>
+        </Card.Root>
       </Stack>
     </PageContainer>
   );
