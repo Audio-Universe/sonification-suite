@@ -3,7 +3,7 @@ name = "sonification-toolkit"
 version = "0.1.0"
 description = "Backend for the sonification toolkit"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.10,<3.14"
 dependencies = [
     "aiofiles>=25.1.0",
     "astroquery==0.4.10",

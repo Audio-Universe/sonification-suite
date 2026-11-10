@@ -53,10 +53,11 @@ Via a command line interface (CLI), the generator will prompt you for:
 1. **Sonification type name:** The name of your new type (e.g. `Exoplanets` or `Black Holes`).
 This can be in upper or lower case, as we normalise the text anyway.
 
-2. **Singular form:** The singular form of the name (e.g. `exoplanet` or `black hole`).
+2. **Description:** A short description displayed to users on the Planetaria landing page.
+
+3. **Singular form:** The singular form of the name (e.g. `exoplanet` or `black hole`).
 This is used to format error messages.
 
-3. **Description:** A short description displayed to users on the Planetaria landing page.
 
 The generator automatically derives the naming conventions used throughout the codebase, including `snake_case`, `PascalCase` and `camelCase` variations.
 
@@ -81,7 +82,7 @@ The landing page for your sonification type will be generated into `src/frontend
 
 Visit this file first, as it contains lots of comments explaining basic React concepts (useful if you are new to TypeScript/React) as well as conventions we use throughout the Suite.
 
-Once you understand the basics of what the page is doing, you can build in your own function and components to search for/retrieve data from the backend. You may also want to change the layout completely, if your sonification type is more like Night Sky, for example.
+Once you understand the basics of what the page is doing, you can build in your own function and components to search for/retrieve data from the backend. You may also want to change the layout completely: an example where the landing page diverges a lot from the template can be seen for _Night Sky_, for example.
 
 I would also change the generic 'Search for an item...' text below the header to something more specific to your data type (e.g. search for an exoplanet...).
 
@@ -161,7 +162,7 @@ By default, it is possible on all sonification types to 'import' a previously do
 
 Depending on the features of your implemented Refine menu, you may want to gather some information about the imported dataset to set up the refine menu.
 
-For instance, with Night Sky, we find the maximum magnitude in the imported dataset and update the limit of the Magnitude input on the refine menu so that it is impossible to go past the new maximum. For constellations, we check whether the imported dataset is an asterism, if it uses a custom order, and whether it used boundaries or stick figure mode. These all affect what options are made available or pre-populated on the constellations refine menu when importing data.
+For instance, with _Night Sky_, we find the maximum magnitude in the imported dataset and update the limit of the Magnitude input on the refine menu so that it is impossible to go past the new maximum. For constellations, we check whether the imported dataset is an asterism, if it uses a custom order, and whether it used boundaries or "stick figure" mode. These all affect what options are made available or pre-populated on the constellations refine menu when importing data.
 
 If you want to implement similar conditions for your extension, you will find an `elif` branch has been generated for you in the `validate_import` function in `core.py`. You just need to add things to the `import_info` dictionary and then add them to the NavigationState object in `handleImportSuccess` in your landing page.
 
