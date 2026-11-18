@@ -78,6 +78,8 @@ We also thank the following individuals for their contributions during the testi
 - Peter Hayton - Newcastle University
 - Daniel Hayton - Newcastle University
 
+We also thank the Cosm Digistar team for their enthusiasm for sonification and for conversations about ideas on how best to develop the Sonification Suite, in a way that it could be effectively integrated in existing planetarium software.
+
 ## Data and Archives
 
 The Sonification Suite for Planetaria makes use of the following archives and databases:
