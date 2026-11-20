@@ -27,6 +27,7 @@ from analytics import log_event
 router = APIRouter(prefix='/core')
 
 logging.basicConfig(level=logging.DEBUG)
+logging.getLogger("pydub.converter").setLevel(logging.WARNING) # Suppress basic pydub logging
 LOG = logging.getLogger(__name__)
 
 # Maximum upload quota per session
@@ -478,7 +479,8 @@ def convert_to_mp3(wav_file: str) -> str:
         audio.export(
             mp3_path,
             format="mp3",
-            bitrate="320k"
+            bitrate="320k",
+            parameters=["-loglevel", "error"]
         )
     except Exception:
         # Remove any partially-created/corrupt MP3
@@ -810,8 +812,6 @@ def get_suggested(soni_type: str):
                 }
 
         data_list.append(data)
-        
-    print(data_list)
         
     return data_list
 
