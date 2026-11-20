@@ -1,5 +1,5 @@
 # Sonification Suite
-[![Documentation](https://readthedocs.org/projects/sonification-suite/badge/?version=latest)](https://sonification-suite.readthedocs.io/)
+[![Documentation](https://app.readthedocs.org/projects/sonification-suite/badge/)](https://sonification-suite.readthedocs.io/)
 ![License](https://img.shields.io/github/license/Audio-Universe/sonification-suite)
 ![Version](https://img.shields.io/badge/version-v1-success)
 

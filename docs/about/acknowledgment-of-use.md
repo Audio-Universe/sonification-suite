@@ -6,4 +6,4 @@ If you use the Sonification Suite for any publication, you must include a citati
 
 Trayford et al., (2025). strauss: Sonification Tools and Resources for Analysis Using Sound Synthesis. Journal of Open Source Software, 10(109), 7875, [https://doi.org/10.21105/joss.07875](https://doi.org/10.21105/joss.07875)
 
-If you make use of any data which has been accessed through the Sonification Suite for a publication it is your own responsibility to appropriately acknowledge the original data source (more information about data sources is provided below).
+If you make use of any data which has been accessed through the Sonification Suite for a publication it is your own responsibility to appropriately acknowledge the original data source (more information about data sources is provided [here](./background-credits.md#data-and-archives)).

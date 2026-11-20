@@ -1,5 +1,7 @@
 # System Architecture
 
+*It may be handy to have a clone of the codebase ([found here](https://github.com/Audio-Universe/sonification-suite)) for reference while reading through this document.*
+
 The Sonification Suite currently runs as a web app, built using a decoupled frontend/backend architecture and deployed on a single self-hosted Linux server.
 
 ## Backend
