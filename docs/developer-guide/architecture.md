@@ -32,7 +32,7 @@ The full documentation for all API endpoints can be found [here](../api-referenc
 
 Unlike a traditional web app, the Suite does not make use of a database, as the added complexity of a database layer was not deemed necessary for the Suite's original purpose. As the project grows, it would be wise to add a database (e.g. if we want to add user logins/authentication, so that each user has persistent storage), but in its presently deployed state, the disk space on our self-hosted server is a hard limitation. Particularly as WAV files can quickly deplete storage, it was not feasible to allow users to 'save' their sonifications in-app (hence why downloading them is the main option).
 
-The workaround is that we have various directories in the backend for our shared read-only data, such as `suggested_data`, `sound_assets`, and `style_files`. For user-specific data, e.g. datasets they have refined, sonifications they have generated etc., we use the `tmp` directory, using their session ID to create a unique directory to use as a temporary workspace.
+The workaround is that we have various directories in the backend for our shared read-only data, such as `suggested_data`, `sound_assets`, and `style_files`. For user-specific data, e.g. datasets they have refined, sonifications they have generated etc., we use the `tmp` directory, using their current session ID to create a unique directory to use as a temporary workspace.
 
 !!! info "Sessions"
 
@@ -44,7 +44,7 @@ The workaround is that we have various directories in the backend for our shared
 
 ### File Referencing
 
-You will see `file_ref` used quite a lot in the backend, and `fileRef` or `dataRef`, `styleRef` etc. in the frontend. We use a file referencing system so as to not expose the full filepaths/internal structure of the production server, and to avoid any cross-platform formatting errors (e.g. `/` vs `\`).
+You will see `file_ref` used quite a lot in the backend, and `fileRef` or `dataRef`, `styleRef` etc. in the frontend. We use a file referencing system so as to not expose the full filepaths/internal structure of the production server, and to avoid any cross-platform formatting errors (e.g. `/` vs `\` as path separators).
 
 We create file refs by replacing slashes with a colon and using `session` as a prefix if the file lives in the user's session directory, e.g. `session:audio_figure.wav`. A file ref for a shared file might be e.g. `style_files:constellations:mallets.yml`. The last element of a file ref is always the file name with suffix e.g. `beta_persei.csv`.
 
@@ -56,19 +56,19 @@ With all of these session directories for each user, disk space on the server qu
 
 #### File Naming
 
-Firstly, we make use of identical file names in certain situations to force overwriting to the same file, hence avoiding writing to lots of new files that might only be temporary. This only makes sense where it is safe to do so, I.E. any time a user will only need **one** of something.
+Firstly, we make use of identical file names in certain situations to force overwriting to the same file, hence avoiding writing to lots of new files that might only be temporary. This only makes sense where it is safe to do so, i.e. any time a user will only need **one** of something.
 
 For instance, if a user searches for lightcurves, clicking 'plot' on each one will download the data on server, plot it, and return the image. If each user plots a handful of light curves, and each one is written to its own file, we will quickly bloat the server with data which we don't need. Hence, because each user will only ever need one light curve at a time, we overwrite `light_curves.csv` in the user's unique session directory each time. The same happens for constellations and night sky.
 
-For Data Composer, each user-uploaded dataset is given a unique ID (as this is a security requirement from the University cyber team) and written to an `uploads` directory in the user's session directory. Each time a user uploads a file, we check the size of their session directory. If uploading the file would take it over the session quota (50 MB) it is rejected. We have a file name for each layer audio (`layer_1.wav`, `layer_2.wav` etc.) and one for the combined 'master' audio `audio_figure.wav`.
+For _Data Composer_, each user-uploaded dataset is given a unique ID (as this is a security requirement from the University cyber team) and written to an `uploads` directory in the user's session directory. Each time a user uploads a file, we check the size of their session directory. If uploading the file would take it over the session quota (50 MB) it is rejected. We have a file name for each layer audio (`layer_1.wav`, `layer_2.wav` etc.) and one for the combined 'master' audio `audio_figure.wav`.
 
 #### Storage Manager
 
-We also implement a StorageManager class (`StorageManager.py`) which runs in the background and deletes any session directories older than 1 week (we can likely reduce this in the future, as any one user is unlikely to have a tab open for one week working on the same sonification).
+We also implement a `StorageManager` class (`StorageManager.py`) which runs in the background and deletes any session directories older than 1 week (we can likely reduce this in the future, as any one user is unlikely to have a tab open for one week working on the same sonification).
 
 The storage manager also checks the overall disk space on the server, and will trigger a cleanup of the oldest session directories if the disk is over 70% full. If it is over 80% full, a more aggressive cleanup is triggered, which simply means it deletes more session directories to reach a lower target disk usage.
 
-The storage manager runs once every 6 hours to check disk space and clean up any old session directories. It is launched at startup (in `main.py`), and because we use 2 Uvicorn workers on our web server (I.E. two separate processes), we use a [file lock](https://en.wikipedia.org/wiki/File_locking) to ensure only one process runs the cleanup.
+The storage manager runs once every 6 hours to check disk space and clean up any old session directories. It is launched at startup (in `main.py`), and because we use 2 Uvicorn workers on our web server (i.e. two separate processes), we use a [file lock](https://en.wikipedia.org/wiki/File_locking) to ensure only one process runs the cleanup.
 
 The StorageManager class has several attributes in its constructor which may be tweaked in the future, such as:
 
@@ -82,7 +82,7 @@ The StorageManager class has several attributes in its constructor which may be 
 
 The frontend is built using TypeScript and React. React is a JavaScript framework which facilitates single-page component-based user interfaces, and TypeScript is an extension of the JavaScript language that adds static typing (meaning the data types of variables are known before run time, helping to catch bugs early).
 
-We also use [Vite](https://vite.dev/) in development to run the development server and build the frontend (I.E. compile the frontend code into the index.html file that is ultimately served to the browser).
+We also use [Vite](https://vite.dev/) in development to run the development server and build the frontend (i.e. compile the frontend code into the index.html file that is ultimately served to the browser).
 
 We use [ChakraUI (v3)](https://chakra-ui.com/docs/components/concepts/overview) throughout as our component library. This means that all UI elements like buttons, sliders, inputs etc. come from the same place and have a shared style.
 
@@ -114,7 +114,7 @@ You can see all of the items and their descriptions in `src/types/navigation.ts`
 
 ## End-to-End Workflow
 
-This section details the complete flow of data through the application for a typical use case: creating a sonification from a light curve.
+This section details the complete flow of data through the application for a typical use case: creating a sonification from a stellar light curve.
 
 Although the exact process varies slightly between sonification types, the general principles remain the same.
 
@@ -132,7 +132,7 @@ On load, Lightcurves.tsx initialises the `soniType` variable as `light_curves`. 
 
 The user enters a search query for a star.
 
-The frontend sends this query to the backend using the `/search-lightcurves/` endpoint in `light_curves.py`. The backend uses Lightkurve to search for available observations of the star.
+The frontend sends this query to the backend using the `/search-lightcurves/` endpoint in `light_curves.py`. The backend uses the `lightkurve` python library to search for available observations of the star.
 
 The search results are returned to the frontend in JSON format, where they are displayed for the user in a table.
 
@@ -142,7 +142,7 @@ The search results are returned to the frontend in JSON format, where they are d
 
 ### 3. Selecting a Light Curve
 
-When the user selects an observation, the frontend sends another API request to retrieve the corresponding light curve.
+When the user selects an observation, the frontend sends another API request to retrieve the corresponding light curve data.
 
 The backend downloads the light curve, converts it to CSV, and saves it in the user's temporary session directory. For light curves, the resulting dataset is stored as `light_curves.csv`, overwriting any previous light curve belonging to that session.
 
@@ -195,9 +195,9 @@ Upon reaching the Sonify page, the navigation state object contains:
 
 We use `dataName`, `styleName` and `styleDescription` to populate the Summary section, and `dataRef` and `styleRef` are the key things sent to the backend when generating the sonification. `soniType` is used throughout the Sonify page to determine what to render. For instance, when `soniType` is `light_curves`, we render the 'Days per Second' input and the Place on Dome button.
 
-When clicking 'Generate Sonification', an object is built containing the `dataRef`, `styleRef`, `soniType`, `duration`, `audioSystem`, and the observer information (including RA/Dec) if the user is using the Place on Dome feature.
+When clicking 'Generate Sonification', an object is built containing the `dataRef`, `styleRef`, `soniType`, `duration`, `audioSystem`, and the observer information (including sky position in RA/Dec) if the user is using the Place on Dome feature.
 
-This is all sent to the `/generate-sonification/` endpoint in `core.py`. This endpoint then calls STRAUSS to sonify the data using the chosen style. This endpoint also does quite a lot of nuanced work, such as pre-processing the style file, setting up Place on Dome, saving the Mapping Table, and more. For a full understanding of the sonification process, I would recommend looking through the endpoint in the codebase, where it is fully documented.
+This is all sent to the `/generate-sonification/` endpoint in `core.py`. This endpoint then calls STRAUSS to sonify the data using the chosen style. This endpoint also does quite a lot of nuanced work, such as pre-processing the style file, setting up Place on Dome, saving the Mapping Table, and more. For a full understanding of the sonification process, I would recommend looking through the endpoint in the codebase, where it is fully documented. 
 
 The backend saves the resulting sonification as a WAV file in the user's session directory, and returns the file reference. The frontend then renders the audio player, and sends a GET request to the `/audio/` endpoint to retrieve the audio and play it. If they click download, the same endpoint is called but with a 'download' flag added as well as the requested format (WAV, MP3).
 
@@ -207,4 +207,4 @@ After generating the audio, the spectrogram can then be requested from `/generat
 
 Throughout this process, all user-specific datasets, plots and generated audio files are stored temporarily in the user's session directory.
 
-These files are not intended to provide persistent storage. The [StorageManager](#storage-manager) runs periodically in the background, removing old session directories and managing overall disk usage on the server. This ensures that temporary files do not accumulate indefinitely and that available server storage remains within acceptable limits.
+These files are not intended for persistent storage. The [StorageManager](#storage-manager) runs periodically in the background, removing old session directories and managing overall disk usage on the server. This ensures that temporary files do not accumulate indefinitely and that available server storage remains within acceptable limits.
