@@ -233,6 +233,15 @@ def generate_sonification(request: SonificationRequest, connection: Request):
     
 @router.post('/generate-spectrogram/')
 def generate_spectrogram(request: DataRequest):
+    """ Generates the spectrogram image for a given audio file. This is used to provide 
+        a visualisation of the sonification on the final 'Sonify' page.
+
+    Args:
+        request (DataRequest): The file reference to the generated WAV file.
+
+    Returns:
+        image (str): The base64 string with the PNG image encoded.
+    """
 
     filepath = resolve_file(request.file_ref)
 
@@ -325,6 +334,23 @@ def get_audio(
     volume: float = 1,
     download: bool = False
     ):
+    """ Retrieve an audio file from disk. This endpoint is used to both play the file in the 
+        browser audio player, or to download the audio to the client if user clicks 'Download'. 
+        
+        If downloading, we log the event in the analytics file.
+
+    Args:
+        connection (Request): The HTTP connection (used to get client IP for analytics)
+        background_tasks (BackgroundTasks): Used to delete volume-adjusted audio file after sending response
+        file_ref (str): The file reference to the 
+        name (str): _description_
+        audio_format (str, optional): _description_. Defaults to 'wav'.
+        volume (float, optional): _description_. Defaults to 1.
+        download (bool, optional): _description_. Defaults to False.
+
+    Returns:
+        _type_: _description_
+    """
     
     audio_format = audio_format.lower()
     
