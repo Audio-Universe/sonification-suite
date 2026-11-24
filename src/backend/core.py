@@ -342,14 +342,20 @@ def get_audio(
     Args:
         connection (Request): The HTTP connection (used to get client IP for analytics)
         background_tasks (BackgroundTasks): Used to delete volume-adjusted audio file after sending response
-        file_ref (str): The file reference to the 
-        name (str): _description_
-        audio_format (str, optional): _description_. Defaults to 'wav'.
-        volume (float, optional): _description_. Defaults to 1.
-        download (bool, optional): _description_. Defaults to False.
+        file_ref (str): The file reference to the audio file
+        name (str): The name to give the file
+        audio_format (str, optional): The file format (either 'mp3' or 'wav'). Defaults to 'wav'.
+        volume (float, optional): The volume of the audio file. This is used if the user has created 
+                                a multi-layer sonification and has changed the volume of individual 
+                                layers, and now wants to download one of those layers. Defaults to 1.
+        download (bool, optional): Whether this is a download, so we can log the event in analytics. Defaults to False.
 
     Returns:
-        _type_: _description_
+        FileResponse: The requested audio file
+        
+    Raises:
+            HTTPException: 400 - If the audio format is not 'wav' or 'mp3'.
+            HTTPException: 400 - If the requested volume is not between 0 and 1.
     """
     
     audio_format = audio_format.lower()
@@ -400,6 +406,14 @@ def get_audio(
     
 @router.post('/mix-layer-volumes/')
 def mix_layer_volumes(request: VolumeRequest):
+    """Mix the volume levels of a multi-layer sonification.
+
+    Args:
+        request (VolumeRequest): The array of volume levels (index position corresponds to layer number).
+
+    Returns:
+        file_ref (str): The file reference to the mixed master audio.
+    """
     
     if all(vol == 1 for vol in request.volumes):
         # return original master if volumes all reset to 1
@@ -438,6 +452,11 @@ def mix_layer_volumes(request: VolumeRequest):
     return {'file_ref': 'session:audio_figure_mixed.wav'}
     
 def apply_volume(wav_path: str, volume: float, output_path: str) -> None:
+    """
+    Change the volume level of a single audio file. 
+    
+    Used when downloading a single layer of a multi-layer sonification which has had its volume altered.
+    """
     if not 0 <= volume <= 1:
         raise ValueError("Volume must be between 0 and 1")
 
@@ -456,10 +475,10 @@ def convert_to_mp3(wav_file: str) -> str:
     Convert a WAV file to an MP3.
 
     Args:
-        wav_file: Path to the WAV file.
+        wav_file (str): Path to the WAV file.
 
     Returns:
-        Path to the temporary MP3 file.
+        (str) Path to the temporary MP3 file.
 
     Raises:
         FileNotFoundError: If the WAV file does not exist.
@@ -519,6 +538,18 @@ def convert_to_mp3(wav_file: str) -> str:
 
 @router.get("/download/{file_ref}")
 def download_file(file_ref: str, name: str | None = None):
+    """
+    Download a non-audio file (those are downloaded at '/audio/{file_ref}').
+    
+    These files are typically a Data file (.csv), a Style file (.yml) or the Mapping Table (.csv).
+
+    Args:
+        file_ref (str): File reference to the requested file
+        name (str | None, optional): Name to give the downloaded file. Defaults to None.
+
+    Returns:
+        FileResponse: The requested file
+    """
 
     file_path = str(resolve_file(file_ref))
     file_name = name or file_ref.split(':')[-1]
@@ -538,20 +569,31 @@ def download_file(file_ref: str, name: str | None = None):
 @router.post('/upload-data/')
 async def upload_data(request: Request, file: UploadFile, soni_type: str | None = Form(None)):
     """
-    Function for the user to upload their own data to the system, which is then written
-    to the tmp directory. The maximum file size is 10mb (this is set in nginx).
+    Upload a user-provided data file to the system. The file is written to the tmp directory.
+    The maximum file size is 10 MB (configured in Nginx).
 
-    - **request**: The HTTP connection, used to log the IP address of the upload attempt
-    - **file**: The user-uploaded data file
-    - **soni_type**: Optionally, the sonification type (if this is imported data from the Suite). 
-    This is then used to validate that the data is of the correct sonification type.
-    
+    Args:
+        request (Request): The HTTP connection (used to log the IP address of the upload attempt).
+        file (UploadFile): The user-uploaded data file.
+        soni_type (str, optional): The sonification type, if the file is imported data from the Suite.
+                                 This is used to validate that the data belongs to the correct
+                                 sonification type. Defaults to None.
+
     Returns:
-    - **file_ref**: The reference to the uploaded file
-    - **import_info**: If this is an import, the info contains the data name, 
-    and often values needed to set up the refine page (e.g. number of stars, max magnitude, etc.).
-    If not an import, this is None. 
-    
+        dict: The JSON response containing:
+            file_ref (str): The reference to the uploaded file.
+            import_info (dict, optional): If this is an import, contains the data name and any
+                                          additional information needed to set up the Refine page
+                                          (e.g. number of stars, maximum magnitude, etc.).
+                                          Otherwise, None.
+
+    Raises:
+        HTTPException: 400 - If the uploaded file has multiple extensions.
+        HTTPException: 400 - If the uploaded file is empty.
+        HTTPException: 400 - If the uploaded file exceeds the maximum file size of 10 MB.
+        HTTPException: 415 - If the uploaded file is not in CSV format.
+        HTTPException: 415 - If the uploaded CSV file cannot be decoded as UTF-8.
+        HTTPException: 429 - If the session's upload quota has been exceeded.
     """
 
 
@@ -740,14 +782,30 @@ def validate_import(file_contents: bytes, soni_type: str, filename: str):
     
     return file_ref, import_info
 
-    
-
-def round_range(range: list, dp: int = 2) -> list:
-    return [round(float(v), dp) for v in range]
-
 
 @router.get('/get-inputs/')
 def get_inputs(file_ref: str, soni_type: str):
+    """
+    Return information about the inputs (columns) for a given data type.
+    
+    For most sonification types, this will retrieve the metadata from inputs_outputs.py. For Data Composer,
+    this will just return the column headers, an empty description, and check which columns are numeric.
+
+    Args:
+        file_ref (str): File reference to the data
+        soni_type (str): Sonification type the data belongs to (e.g. 'light_curves', 'constellations', 'data_composer', etc.)
+
+    Raises:
+        HTTPException: 400 - If the data file is not in CSV format
+
+    Returns:
+        list of dictionaries containing:
+            name (str): The display name for the variable
+            desc (str): The description of the data variable (if using a built-in soni_type)
+            key (str): The exact column header used in the data (for Data Composer, this is the same as name)
+            numeric (bool): Whether the column contains strictly numeric data (and therefore is suitable for sonifying)
+        
+    """
     
     filepath = str(resolve_file(file_ref))
     
