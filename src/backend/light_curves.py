@@ -219,7 +219,7 @@ def get_identifiers(query: StarQuery):
         # Get identifiers for lightkurve search
         ids_table = Simbad.query_objectids(query.star_name)
         if ids_table is None:
-            return []
+            return [], None, None
 
         # Convert to a list of plain strings
         all_ids = ids_table["id"].tolist()
